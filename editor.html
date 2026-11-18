@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Yu Ohta — Page editor</title>
+    <style>
+      :root { color-scheme: light; --paper: #f5f4f0; --ink: #30342f; --soft: #72776e; --line: #d4d7ce; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.7 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; }
+      button, input, select, textarea { font: inherit; }
+      button { cursor: pointer; border: 1px solid var(--line); border-radius: 5px; padding: 9px 15px; background: #fff; color: var(--ink); }
+      button:hover:not(:disabled) { background: #eaece5; }
+      button:disabled { opacity: .4; cursor: default; }
+      button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+      button.primary:hover:not(:disabled) { background: #4d5548; }
+      :focus-visible { outline: 2px solid #66745d; outline-offset: 3px; }
+      input, select, textarea { display: block; width: 100%; min-width: 0; border: 1px solid #c8cec1; border-radius: 5px; background: #fff; color: var(--ink); padding: 10px 12px; }
+      select { appearance: none; min-height: 44px; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, #72776e 50%), linear-gradient(135deg, #72776e 50%, transparent 50%); background-position: calc(100% - 15px) 19px, calc(100% - 10px) 19px; background-size: 5px 5px; background-repeat: no-repeat; }
+      textarea { resize: vertical; min-height: 90px; }
+      input[type=checkbox] { display: inline-block; width: auto; }
+      [hidden] { display: none !important; }
+      header { max-width: 1320px; margin: auto; padding: 32px 30px 24px; display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+      h1 { font-size: 27px; font-weight: 500; letter-spacing: -.04em; margin: 0; }
+      .eyebrow { font-size: 10px; letter-spacing: .17em; color: var(--soft); margin-bottom: 6px; }
+      header p, .muted { color: var(--soft); margin: 5px 0 0; font-size: 12px; }
+      .toolbar { width: calc(100% - 60px); max-width: 1260px; margin: 0 auto; padding: 19px 0; border-block: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+      #fileName { flex: 1; min-width: 170px; font-size: 12px; color: var(--soft); overflow-wrap: anywhere; }
+      .layout { max-width: 1320px; margin: auto; padding: 28px 30px 80px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 36px; }
+      .panel { min-width: 0; }
+      h2 { font-size: 17px; font-weight: 500; margin: 0 0 18px; }
+      h3 { font-size: 14px; margin: 0 0 8px; font-weight: 500; }
+      fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+      .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 18px; }
+      .field { min-width: 0; }
+      .wide { grid-column: 1 / -1; }
+      label, .field-label { display: block; font-size: 12px; font-weight: 500; margin-bottom: 7px; }
+      .required { color: #737c69; font-size: 10px; margin-left: 6px; font-weight: 400; }
+      .control { display: flex; align-items: stretch; gap: 6px; }
+      .control select { flex: 1; }
+      .control button { padding: 8px 11px; flex: 0 0 auto; font-size: 17px; }
+      .hint { color: var(--soft); font-size: 11px; margin: 6px 0 0; }
+      .line { border-top: 1px solid var(--line); padding-top: 20px; }
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; margin-top: 22px; }
+      .preview { border: 1px solid var(--line); background: #eeeee8; border-radius: 7px; overflow: hidden; min-height: 300px; }
+      iframe { display: block; width: 100%; height: 350px; border: 0; background: #f3f2ee; }
+      .preview-head { padding: 10px 16px; font-size: 10px; color: var(--soft); letter-spacing: .1em; border-bottom: 1px solid var(--line); }
+      #previewHint { padding: 16px 20px; margin: 0; }
+      #notice { max-width: 1260px; margin: 14px auto 0; padding: 12px 16px; border-left: 3px solid #68755e; background: #e8ede2; white-space: pre-line; }
+      #notice.error { border-color: #9f513c; background: #f5e9e3; }
+      .queue { margin-top: 28px; }
+      .queue-item { border-top: 1px solid var(--line); padding: 16px 0; }
+      .queue-item p { font-size: 12px; overflow-wrap: anywhere; margin: 3px 0; }
+      .queue-item .actions { margin-top: 8px; }
+      .queue-item button { font-size: 11px; padding: 5px 10px; }
+      .links-row { display: grid; grid-template-columns: 1fr 1.7fr auto; gap: 8px; margin-bottom: 9px; align-items: start; }
+      .links-row input { font-size: 12px; }
+      .links-row button { padding: 9px; }
+      details { border-top: 1px solid var(--line); margin-top: 25px; padding-top: 18px; }
+      summary { cursor: pointer; font-size: 12px; }
+      details p { font-size: 12px; color: var(--soft); }
+      #existing { padding-left: 18px; color: var(--soft); font-size: 12px; }
+      #existing li { margin: 8px 0; }
+      dialog { width: min(460px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 8px; padding: 25px; color: var(--ink); background: var(--paper); }
+      dialog::backdrop { background: #23282060; }
+      .empty { font-size: 12px; padding: 22px 0; color: var(--soft); }
+      @media (max-width: 900px) {
+        .layout { grid-template-columns: 1fr; gap: 35px; }
+        .toolbar { width: calc(100% - 48px); margin-inline: 24px; }
+        header { align-items: flex-start; }
+        #saveOriginal { display: none; }
+      }
+      @media (max-width: 500px) {
+        header, .layout { padding-inline: 18px; }
+        header { flex-direction: column; }
+        .toolbar { width: calc(100% - 36px); margin-inline: 18px; }
+        .fields { grid-template-columns: 1fr; }
+        .links-row { grid-template-columns: 1fr auto; }
+        .links-row input:first-child { grid-column: 1 / -1; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div><div class="eyebrow">YU OHTA / EDITOR</div><h1>項目を追加する</h1><p id="workflow">HTMLを開く → 入力する → 追加リストに入れる → 保存する</p></div>
+      <button id="restoreDraft" hidden>前回の作業を復元</button>
+    </header>
+    <div class="toolbar">
+      <button id="openFile">index.html を開く</button>
+      <input id="fileInput" type="file" accept=".html,text/html" hidden>
+      <span id="fileName">編集したい index.html を選んでください。</span>
+      <button id="saveOriginal" disabled>元ファイルを更新</button>
+      <button id="exportFile" class="primary" disabled>更新版を書き出す</button>
+      <button id="retryPush" hidden>pushを再試行</button>
+      <button id="publishFile" class="primary" disabled hidden>保存して公開</button>
+    </div>
+    <div id="notice" role="status" aria-live="polite" hidden></div>
+    <main class="layout">
+      <section class="panel">
+        <h2 id="formTitle">新しい項目</h2>
+        <form id="entryForm">
+          <fieldset id="entryFields" disabled>
+            <div class="fields">
+              <div class="field"><label for="section">章<span class="required">必須</span></label><select id="section"><option value="research">RESEARCH</option><option value="activity">ACTIVITY</option><option value="media">MEDIA</option></select></div>
+              <div class="field"><label for="status">種別<span class="required">必須</span></label><div class="control"><select id="status" required></select><button type="button" data-add="status" aria-label="種別の選択肢を追加">＋</button></div></div>
+              <div class="field" data-for="research"><label for="group">研究分野<span class="required">必須</span></label><div class="control"><select id="group"></select><button type="button" data-add="group" aria-label="研究分野を追加">＋</button></div></div>
+              <div class="field" data-for="research media"><label for="year">年<span class="required">必須</span></label><input id="year" type="number" min="1900" max="2199" step="1" placeholder="2026"><p class="hint">公開・掲載年。4桁で表示します。</p></div>
+              <div class="field" data-for="activity" hidden><label for="date">開催日<span class="required">必須</span></label><input id="date" type="date"><p class="hint">複数日開催の場合は初日。期間は説明欄へ。</p></div>
+              <div class="field" data-for="activity" hidden><label for="city">都市<span class="required">必須</span></label><div class="control"><select id="city"></select><button type="button" data-add="city" aria-label="都市を追加">＋</button></div></div>
+              <div class="field" data-for="activity" hidden><label for="country">国<span class="required">必須</span></label><div class="control"><select id="country"></select><button type="button" data-add="country" aria-label="国を追加">＋</button></div></div>
+              <div class="field" data-for="research media"><label id="sourceLabel" for="source">掲載先<span class="required">必須</span></label><div class="control"><select id="source"></select><button type="button" data-add="source" aria-label="掲載先・サイト名を追加">＋</button></div></div>
+              <div class="field wide line"><label for="title">タイトル<span class="required">必須</span></label><textarea id="title" rows="2" required placeholder="研究タイトル、学会名、記事タイトルなど"></textarea></div>
+              <div class="field wide"><label for="titleURL">タイトルのリンク先</label><input id="titleURL" type="text" inputmode="url" placeholder="https://…"><p class="hint">空欄なら、リンクのないタイトルになります。</p></div>
+              <div class="field wide" data-for="research"><label for="authors">著者<span class="required">必須</span></label><textarea id="authors" rows="2" placeholder="Yu Ohta"></textarea><p class="hint">1行に1名。入力した順序で表示します。</p></div>
+              <div class="field wide" data-for="activity media" hidden><label id="bylineLabel" for="byline">発表・参加内容</label><input id="byline" placeholder="Poster HP-46 · Presentation title"></div>
+              <div class="field wide"><label for="related">関連する項目へのページ内リンク</label><select id="related"><option value="">なし</option></select><p class="hint">リンク先が画面中央に来ます。追加した項目も選べます。</p></div>
+              <div class="field wide"><label for="description">説明</label><textarea id="description" rows="3" placeholder="イベントの概要や研究内容を簡潔に。"></textarea></div>
+              <div class="wide line"><div class="field-label">関連リンク</div><div id="links"></div><button id="addLink" type="button">＋ リンクを追加</button></div>
+            </div>
+            <div class="actions"><button id="queueButton" class="primary" type="submit">追加リストに入れる</button><button id="resetForm" type="button">入力をリセット</button></div>
+          </fieldset>
+        </form>
+        <details><summary>使い方・保存について</summary><p>選択肢は各プルダウン横の「＋」から追加できます。追加した選択肢はこのブラウザに保存され、書き出すHTMLにも引き継がれます。</p><p>項目は日付の新しい順に入り、RESEARCHは研究分野ごとに整理されます。保存前の追加リストは編集・削除できます。</p><p>「Edit Website.command」をダブルクリックして起動すると、「保存して公開」で保存・commit・pushを続けて行います。サイトへの反映には少し時間がかかります。送信に失敗した内容はローカルに残り、pushを再試行できます。</p><p>HTMLだけを開いた場合は「更新版を書き出す」で保存します。ブラウザによってはダウンロードになるため、保存したファイルで元の index.html を置き換えてください。</p></details>
+      </section>
+      <section class="panel">
+        <h2>表示プレビュー</h2>
+        <div class="preview"><div class="preview-head">ITEM PREVIEW</div><iframe id="preview" title="追加する項目のプレビュー" sandbox></iframe><p id="previewHint" class="hint">ファイルを開き、タイトルなどを入力すると表示されます。</p></div>
+        <div class="queue"><h2>追加リスト <span id="queueCount" class="muted">0件</span></h2><div id="queueList"><p class="empty">追加予定の項目はまだありません。</p></div></div>
+        <details><summary>読み込んだ項目 <span id="existingCount"></span></summary><ul id="existing"></ul></details>
+      </section>
+    </main>
+    <dialog id="optionDialog" aria-labelledby="optionTitle">
+      <form id="optionForm"><h2 id="optionTitle">選択肢を追加</h2><label for="optionValue">表示する名前</label><input id="optionValue" required maxlength="120"><p class="hint">入力した名前がプルダウンとサイトに表示されます。</p><div class="actions"><button class="primary" type="submit">追加</button><button id="cancelOption" type="button">キャンセル</button></div></form>
+    </dialog>
+    <script>
+/* Text-based insertion preserves all pre-existing HTML formatting. */
+(() => {
+  'use strict';
+  const defaults = {
+    groups: ['Machine Learning', 'Mathematics'],
+    researchSources: ['Zenodo', 'arXiv'],
+    mediaSources: ['N High Research Club', 'Kaijo School'],
+    researchStatuses: ['Proceedings', 'Preprint', 'Journal'],
+    activityStatuses: ['Poster', 'Oral presentation', 'Poster and oral presentation', 'Award', 'Attendance', 'Planned'],
+    mediaStatuses: ['Profile', 'Interview', 'Article', 'News'],
+    cities: ['Tokyo', 'Yokohama', 'Kobe', 'Athens'],
+    countries: ['Japan', 'Greece']
+  };
+  const clean = value => String(value ?? '').trim().replace(/\s+/g, ' ');
+  const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+  const decode = value => value.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (all, name) => {
+    if (name[0] === '#') return String.fromCodePoint(parseInt(name.slice(name[1].toLowerCase() === 'x' ? 2 : 1), name[1].toLowerCase() === 'x' ? 16 : 10));
+    return {amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",nbsp:' '}[name.toLowerCase()];
+  });
+  const plain = value => clean(decode(value.replace(/<[^>]*>/g, '')));
+  function attributes(tag) {
+    const found = {};
+    for (const match of tag.matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) found[match[1]] = decode(match[2] ?? match[3]);
+    return found;
+  }
+  const hasClass = (attrs, name) => (attrs.class || '').split(/\s+/).includes(name);
+  function elements(source) {
+    const stack = [], result = [];
+    const token = /<!--[\s\S]*?-->|<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>|<\/?[a-z][^>]*>/gi;
+    const voids = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr','path','circle','polygon','rect','line','polyline','stop']);
+    for (const m of source.matchAll(token)) {
+      if (m[0].startsWith('<!--') || m[1]) continue;
+      const tag = /^<\/?([\w-]+)/.exec(m[0])[1].toLowerCase();
+      if (m[0][1] === '/') {
+        const i = stack.findLastIndex(x => x.tag === tag);
+        if (i < 0) continue;
+        const node = stack[i]; stack.length = i;
+        node.closeStart = m.index; node.end = m.index + m[0].length;
+        result.push(node);
+      } else if (!voids.has(tag) && !m[0].endsWith('/>')) {
+        stack.push({tag, attrs:attributes(m[0]), start:m.index, openEnd:m.index+m[0].length});
+      }
+    }
+    return result.sort((a,b) => a.start-b.start);
+  }
+  const inside = (child, parent) => child.start >= parent.openEnd && child.end <= parent.closeStart;
+  function sectionInfo(source, section) {
+    const nodes = elements(source);
+    const region = nodes.find(n => n.tag === 'section' && n.attrs.id === section);
+    if (!region) throw new Error(`${section.toUpperCase()}章が見つかりません。`);
+    const list = nodes.find(n => n.tag === 'div' && hasClass(n.attrs,'research-list') && inside(n,region));
+    if (!list) throw new Error('項目の追加先が見つかりません。HTMLの構造を確認してください。');
+    const articles = nodes.filter(n => n.tag==='article' && inside(n,list));
+    const groups = nodes.filter(n => n.tag==='h3' && hasClass(n.attrs,'research-group') && inside(n,list));
+    return {nodes,region,list,articles,groups};
+  }
+  function classText(source, article, name) {
+    const found = elements(source).find(n => hasClass(n.attrs,name) && inside(n,article));
+    return found ? plain(source.slice(found.openEnd,found.closeStart)) : '';
+  }
+  function read(source) {
+    if (!/<!doctype\s+html/i.test(source) || !source.includes('item-dateline') || !source.includes('item-source')) throw new Error('この編集フォームに対応した最新版の index.html を選んでください。');
+    const result = {groups:[], entries:[], styles:source.match(/<style>([\s\S]*?)<\/style>/i)?.[1] || '', settings:{}};
+    for (const section of ['research','activity','media']) {
+      const info=sectionInfo(source,section);
+      for (const g of info.groups) result.groups.push(plain(source.slice(g.openEnd,g.closeStart)));
+      for (const a of info.articles) {
+        const h=info.nodes.find(n=>n.tag==='h3' && inside(n,a));
+        result.entries.push({section,id:a.attrs.id || '', title:h?plain(source.slice(h.openEnd,h.closeStart)).replace(/\s*↗$/,''):'',
+          date:classText(source,a,'item-dateline'),source:classText(source,a,'item-source'),status:classText(source,a,'status')});
+      }
+    }
+    const settings = source.match(/<script\b[^>]*\bid="page-editor-settings"[^>]*>([\s\S]*?)<\/script>/i);
+    if (settings) { try { result.settings=JSON.parse(settings[1]); } catch {} }
+    return result;
+  }
+  function mergeOptions(...sources) {
+    const result = {};
+    for (const key of Object.keys(defaults)) {
+      const values = sources.flatMap(s => Array.isArray(s?.[key]) ? s[key] : []);
+      result[key] = [];
+      for (const value of values) {
+        const text=normalizeOption(value);
+        if (text && !result[key].some(s=>s.toLowerCase()===text.toLowerCase())) result[key].push(text);
+      }
+    }
+    return result;
+  }
+  function normalizeOption(value) {
+    let text=clean(value);
+    if (/^jounal$/i.test(text)) text='Journal';
+    if (/^poster and oral$/i.test(text)) text='Poster and oral presentation';
+    return Object.values(defaults).flat().find(v=>v.toLowerCase()===text.toLowerCase()) || text;
+  }
+  function safeURL(value, required=false) {
+    const text=clean(value);
+    if (!text && !required) return '';
+    if (/^#[A-Za-z][\w:.-]*$/.test(text)) return text;
+    let url;
+    try { url=new URL(text); } catch { throw new Error('リンクは https:// で始まるURL、または #項目名 を入力してください。'); }
+    if (!['https:','http:'].includes(url.protocol) || !url.hostname) throw new Error('この種類のURLは使用できません。');
+    return text;
+  }
+  function dateValue(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('日付を入力してください。');
+    const d=new Date(value+'T00:00:00Z');
+    if (!Number.isFinite(d.getTime()) || d.toISOString().slice(0,10)!==value) throw new Error('実在する日付を入力してください。');
+    return value.replace(/-/g,'.');
+  }
+  function validate(input) {
+    const entry={...input};
+    for (const key of ['section','group','year','date','city','country','source','status','title','titleURL','byline','relatedId','relatedLabel']) entry[key]=clean(entry[key]);
+    entry.description=String(entry.description || '').trim();
+    entry.authors=String(entry.authors || '').split('\n').map(clean).filter(Boolean);
+    if (!['research','activity','media'].includes(entry.section)) throw new Error('章を選んでください。');
+    if (!entry.title) throw new Error('タイトルを入力してください。');
+    if (!entry.status) throw new Error('種別を選んでください。');
+    if (entry.section==='activity') {
+      entry.dateline=dateValue(entry.date);
+      if (!entry.city || !entry.country) throw new Error('都市と国を選んでください。');
+      entry.dateline+=`, ${entry.city}, ${entry.country}`;
+    } else {
+      if (!/^(?:19|20|21)\d{2}$/.test(entry.year)) throw new Error('年を4桁で入力してください。');
+      if (!entry.source) throw new Error('掲載先・サイト名を選んでください。');
+      entry.dateline=entry.year;
+    }
+    if (entry.section==='research' && (!entry.group || !entry.authors.length)) throw new Error('研究分野と著者を入力してください。');
+    if (entry.section==='research') entry.byline=`${entry.authors.length===1?'Author':'Authors'}: ${entry.authors.join(' · ')}`;
+    entry.titleURL=safeURL(entry.titleURL);
+    entry.links=(entry.links || []).filter(x=>clean(x.label)||clean(x.url)).map(x=> {
+      if (!clean(x.label)) throw new Error('関連リンクの表示名を入力してください。');
+      return {label:clean(x.label).replace(/\s*↗$/,''),url:safeURL(x.url,true)};
+    });
+    entry.status=normalizeOption(entry.status);
+    entry.source=normalizeOption(entry.source);
+    if (entry.relatedId && !/^[A-Za-z][\w:.-]*$/.test(entry.relatedId)) throw new Error('関連項目のIDが不正です。');
+    return entry;
+  }
+  function uniqueId(source, entries, title) {
+    const used=new Set(elements(source).map(n=>n.attrs.id).filter(Boolean).concat(entries.map(e=>e.id)));
+    const slug=clean(title).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,50).replace(/-$/,'') || 'item';
+    let id='entry-'+slug, n=2;
+    while(used.has(id)) id='entry-'+slug+'-'+n++;
+    return id;
+  }
+  function render(entry) {
+    const e=entry, lines=[`          <article id="${escape(e.id)}" class="research-item" data-anchor-highlight>`,
+      `            <span class="item-dateline mono">${escape(e.dateline)}</span>`, '            <div class="item-main">'];
+    if(e.section!=='activity') lines.push(`              <div class="item-source mono">${escape(e.source)}</div>`);
+    lines.push('              <h3>');
+    if(e.titleURL) {
+      const external=!e.titleURL.startsWith('#');
+      lines.push(`                <a href="${escape(e.titleURL)}"${external?' target="_blank" rel="noopener noreferrer"':''}>`,
+        `                  ${escape(e.title.replace(/\s*↗$/,''))}${external?' ↗':''}`, '                </a>');
+    } else lines.push(`                ${escape(e.title)}`);
+    lines.push('              </h3>');
+    if(e.byline || e.relatedId) {
+      let text=escape(e.byline);
+      if(e.relatedId) text+=`${text?' · ':''}Related work: <a href="#${escape(e.relatedId)}" style="text-decoration: underline; text-underline-offset: 3px;">${escape(e.relatedLabel)}</a>`;
+      lines.push('              <div class="byline">',`                ${text}`,'              </div>');
+    }
+    if(e.description) {
+      lines.push('              <div class="item-description">');
+      for(const line of e.description.split('\n').map(clean).filter(Boolean)) lines.push(`                ${escape(line)}`);
+      lines.push('              </div>');
+    }
+    if(e.links.length) {
+      lines.push('              <div class="pub-links mono">');
+      for(const link of e.links) {
+        const external=!link.url.startsWith('#');
+        lines.push(`                <a href="${escape(link.url)}"${external?' target="_blank" rel="noopener noreferrer"':''}>`,
+          `                  ${escape(link.label)}${external?' ↗':''}`, '                </a>');
+      }
+      lines.push('              </div>');
+    }
+    lines.push('            </div>','            <div class="item-side">',`              <span class="status">${escape(e.status)}</span>`, '            </div>','          </article>');
+    return lines.join('\n');
+  }
+  const lineStart=(source,pos)=> {
+    const start=source.lastIndexOf('\n',pos-1)+1;
+    return /^\s*$/.test(source.slice(start,pos)) ? start : pos;
+  };
+  const dateKey=text=>(text.match(/^\d{4}(?:\.\d{2}\.\d{2})?/)?.[0] || '').padEnd(10,'.00');
+  function insert(source,entry) {
+    const info=sectionInfo(source,entry.section);
+    if(info.nodes.some(n=>n.attrs.id===entry.id)) throw new Error('項目のIDが重複しています。追加リストを確認してください。');
+    let candidates=info.articles, end=info.list.closeStart, prefix='';
+    if(entry.section==='research') {
+      const group=info.groups.find(n=>plain(source.slice(n.openEnd,n.closeStart))===entry.group);
+      if(!group) {
+        candidates=[];
+        prefix=`          <h3 class="research-group">${escape(entry.group)}</h3>\n\n`;
+      } else {
+        const next=info.groups.find(n=>n.start>group.start);
+        end=next?.start ?? info.list.closeStart;
+        candidates=candidates.filter(n=>n.start>group.end && n.end<=end);
+      }
+    }
+    const earlier=candidates.find(n=>dateKey(classText(source,n,'item-dateline'))<dateKey(entry.dateline));
+    const pos=lineStart(source,earlier?.start ?? end);
+    const addition=prefix+render(entry)+'\n\n';
+    return source.slice(0,pos)+addition+source.slice(pos);
+  }
+  function build(source,entries,options) {
+    read(source);
+    const ids=new Set(elements(source).map(n=>n.attrs.id).filter(Boolean).concat(entries.map(e=>e.id)));
+    for(const entry of entries) {
+      if(entry.relatedId&&!ids.has(entry.relatedId)) throw new Error(`「${entry.title}」の関連項目が見つかりません。`);
+      for(const url of [entry.titleURL,...entry.links.map(x=>x.url)]) if(url?.startsWith('#')&&!ids.has(url.slice(1))) throw new Error(`リンク先 ${url} がありません。`);
+    }
+    let result=source;
+    for(const entry of entries) result=insert(result,entry);
+    const json=JSON.stringify(options,null,2).replace(/</g,'\\u003c').replace(/&/g,'\\u0026');
+    const config=`    <script type="application/json" id="page-editor-settings">\n${json}\n    <\/script>`;
+    const existing=/<script\b[^>]*\bid="page-editor-settings"[^>]*>[\s\S]*?<\/script>/i;
+    if(existing.test(result)) result=result.replace(existing,config.trimStart());
+    else result=result.replace(/  <\/body>/,config+'\n  </body>');
+    return result;
+  }
+  globalThis.PageEditor={defaults,clean,escape,plain,elements,read,mergeOptions,normalizeOption,validate,uniqueId,render,insert,build};
+})();
+
+    </script>
+    <script>
+(() => {
+  'use strict';
+  const P=PageEditor, $=id=>document.getElementById(id), key='yu-ohta-page-editor-v1';
+  const localToken=document.querySelector('meta[name="local-editor-token"]')?.content || '';
+  let baseHash='', busy=false, pushPending=false;
+  let source='', sourceHandle=null, info=null, entries=[], editingId='', optionField='', savedDraft=null;
+  let options=P.mergeOptions(P.defaults), pendingOptions=false;
+  const form=$('entryForm'), notice=$('notice');
+  function message(text,error=false) { notice.hidden=false;notice.textContent=text;notice.classList.toggle('error',error); }
+  function storageRead() { try {return JSON.parse(localStorage.getItem(key)||'null');}catch{return null;} }
+  function persist() {
+    try { localStorage.setItem(key,JSON.stringify({source,entries,options,pendingOptions})); }
+    catch { message('このブラウザでは作業の一時保存ができません。終了前に更新版を書き出してください。',true); }
+  }
+  function optionKey(field) {
+    const section=$('section').value;
+    return {group:'groups',city:'cities',country:'countries',status:section+'Statuses',source:section==='media'?'mediaSources':'researchSources'}[field];
+  }
+  function fillSelect(id,values,placeholder='',previous) {
+    const select=$(id), old=previous ?? select.value;
+    select.replaceChildren();
+    if(placeholder) select.add(new Option(placeholder,''));
+    for(const value of values) select.add(new Option(value,value));
+    if(values.includes(old)) select.value=old;
+  }
+  function updateRelated(previous) {
+    const selected=previous ?? $('related').value;
+    $('related').replaceChildren(new Option('なし',''));
+    for(const e of [...(info?.entries||[]),...entries]) {
+      if(e.id && e.id!==editingId) $('related').add(new Option(e.title,e.id));
+    }
+    if([...$('related').options].some(o=>o.value===selected)) $('related').value=selected;
+  }
+  function updateFields(reset=false) {
+    const section=$('section').value;
+    document.querySelectorAll('[data-for]').forEach(row=> {
+      row.hidden=!row.dataset.for.split(' ').includes(section);
+      row.querySelectorAll('input,select,textarea,button').forEach(control=>control.disabled=row.hidden);
+    });
+    for(const id of ['year','date','city','country','group','source','authors']) $(id).required=!$(id).disabled;
+    for(const field of ['status','group','source','city','country']) {
+      fillSelect(field,options[optionKey(field)],['city','country'].includes(field)?'選択してください':'',reset?'':undefined);
+    }
+    $('sourceLabel').innerHTML=(section==='media'?'サイト名':'掲載先')+'<span class="required">必須</span>';
+    $('bylineLabel').textContent=section==='media'?'掲載内容・本人との関わり':'発表・参加内容';
+    $('byline').placeholder=section==='media'?'Interview with Yu Ohta':'Poster HP-46 · Presentation title';
+    updateRelated();preview();
+  }
+  function addLink(value={label:'',url:''}) {
+    const row=document.createElement('div');row.className='links-row';
+    const label=document.createElement('input');label.placeholder='表示名（例：DOI）';label.setAttribute('aria-label','関連リンクの表示名');label.value=value.label;
+    const url=document.createElement('input');url.placeholder='https://…';url.setAttribute('aria-label','関連リンクのURL');url.value=value.url;
+    const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.setAttribute('aria-label','このリンクを削除');remove.onclick=()=>{row.remove();preview();};
+    row.append(label,url,remove);$('links').append(row);
+  }
+  function readForm() {
+    const data={};
+    for(const id of ['section','status','group','year','date','city','country','source','title','titleURL','authors','byline','description']) data[id]=$(id).value;
+    data.relatedId=$('related').value;
+    data.relatedLabel=$('related').selectedOptions[0]?.textContent || '';
+    data.links=[...$('links').children].map(row=>({label:row.children[0].value,url:row.children[1].value}));
+    return data;
+  }
+  function preview() {
+    if(!info) return;
+    try {
+      const e=P.validate(readForm());e.id=editingId || 'preview-entry';
+      // Imported scripts never execute in this sandboxed item preview.
+      const css=info.styles.replace(/<\/style/gi,'');
+      $('preview').srcdoc='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>'+css+
+        '\nbody{margin:0;background:#f3f2ee}.research-item{--item-inset:22px;padding-block:25px;margin:0;border:0}.research-item h3{font-size:21px;overflow-wrap:anywhere}.item-side .status{white-space:normal;max-width:130px}.item-main{min-width:0}.research-item:before{display:none}</style></head><body>'+P.render(e)+'</body></html>';
+      $('previewHint').textContent='入力中の項目です。「追加リストに入れる」で保存対象になります。';
+    } catch(error) {
+      $('preview').srcdoc='<html lang="ja"><body style="font:14px/1.8 -apple-system,sans-serif;color:#777;padding:30px;background:#f3f2ee">タイトル・日付などの必須項目を入力すると、ここに表示されます。</body></html>';
+      $('previewHint').textContent=error.message;
+    }
+  }
+  function renderQueue() {
+    $('queueCount').textContent=entries.length+'件';$('queueList').replaceChildren();
+    if(!entries.length) {const p=document.createElement('p');p.className='empty';p.textContent='追加予定の項目はまだありません。';$('queueList').append(p);}
+    for(const e of entries) {
+      const row=document.createElement('div');row.className='queue-item';
+      const meta=document.createElement('p');meta.className='muted';meta.textContent=e.section.toUpperCase()+' / '+e.dateline;
+      const title=document.createElement('p');title.textContent=e.title;
+      const actions=document.createElement('div');actions.className='actions';
+      const edit=document.createElement('button');edit.textContent='編集';edit.onclick=()=>editEntry(e);
+      const remove=document.createElement('button');remove.textContent='削除';remove.onclick=()=> {
+        const dependency=entries.find(x=>x.id!==e.id && (x.relatedId===e.id || [x.titleURL,...x.links.map(l=>l.url)].includes('#'+e.id)));
+        if(dependency) return message(`「${dependency.title}」からリンクされています。先にその関連リンクを外してください。`,true);
+        entries=entries.filter(x=>x.id!==e.id);if(editingId===e.id) resetForm();
+        persist();renderQueue();updateRelated();
+      };
+      actions.append(edit,remove);row.append(meta,title,actions);$('queueList').append(row);
+    }
+    $('exportFile').disabled=busy || !source;
+    $('saveOriginal').disabled=busy || !sourceHandle || (!entries.length&&!pendingOptions);
+    $('publishFile').disabled=busy || !source || pushPending;
+    $('retryPush').disabled=busy;
+    $('retryPush').hidden=!localToken || !pushPending;
+  }
+  function resetForm() {
+    const section=$('section').value;form.reset();$('section').value=section;
+    $('year').value=new Date().getFullYear();$('authors').value='Yu Ohta';$('links').replaceChildren();editingId='';
+    $('formTitle').textContent='新しい項目';$('queueButton').textContent='追加リストに入れる';
+    updateFields(true);
+  }
+  function editEntry(e) {
+    editingId=e.id;$('section').value=e.section;updateFields(true);
+    for(const id of ['status','group','year','date','city','country','source','title','titleURL','byline','description']) $(id).value=e[id] || '';
+    $('authors').value=e.authors.join('\n');updateRelated(e.relatedId);$('links').replaceChildren();e.links.forEach(addLink);
+    $('formTitle').textContent='追加リストの項目を編集';$('queueButton').textContent='変更を反映する';preview();$('formTitle').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  function showExisting() {
+    $('existingCount').textContent=info.entries.length+'件';$('existing').replaceChildren();
+    for(const e of info.entries) {const li=document.createElement('li');li.textContent=e.section.toUpperCase()+' · '+e.title;$('existing').append(li);}
+  }
+  async function importFile(file,handle=null,preserveDraft=false) {
+    const next=await file.text(), nextInfo=P.read(next);
+    if(entries.length && source!==next && !confirm('別のHTMLを開くと、現在の追加リストは消えます。続けますか？')) return;
+    if(source!==next) entries=[];
+    source=next;sourceHandle=handle;info=nextInfo;
+    const observed={groups:info.groups,researchSources:[],mediaSources:[],researchStatuses:[],activityStatuses:[],mediaStatuses:[]};
+    info.entries.forEach(e=> {if(e.source && e.section!=='activity') observed[e.section+'Sources'].push(e.source);if(e.status) observed[e.section+'Statuses'].push(e.status);});
+    options=P.mergeOptions(P.defaults,options,info.settings,observed);
+    $('entryFields').disabled=false;$('fileName').textContent=file.name+' · '+info.entries.length+'件を読み込みました';
+    pendingOptions=false;resetForm();showExisting();renderQueue();if(!preserveDraft) persist();
+    message('ファイルを読み込みました。入力した項目だけを追加し、既存のHTMLの整形は保ちます。');
+  }
+  $('openFile').onclick=async()=> {
+    if(typeof window.showOpenFilePicker!=='function') return $('fileInput').click();
+    try {
+      const [handle]=await window.showOpenFilePicker({types:[{description:'HTML',accept:{'text/html':['.html']}}],multiple:false});
+      await importFile(await handle.getFile(),handle);
+    } catch(error) {if(error.name==='AbortError') return;if(error.name==='SecurityError') $('fileInput').click();else message(error.message,true);}
+  };
+  $('fileInput').onchange=async event=> {try {if(event.target.files[0]) await importFile(event.target.files[0]);}catch(error){message(error.message,true);}finally{event.target.value='';}};
+  $('section').onchange=()=>updateFields(true);
+  form.addEventListener('input',preview);form.addEventListener('change',preview);
+  $('addLink').onclick=()=>addLink();$('resetForm').onclick=resetForm;
+  form.onsubmit=event=> {
+    event.preventDefault();if(!form.reportValidity()) return;
+    try {
+      const entry=P.validate(readForm());entry.id=editingId || P.uniqueId(source,entries,entry.title);
+      const next=editingId?entries.map(e=>e.id===editingId?entry:e):[...entries,entry];
+      P.build(source,next,options);entries=next;
+      persist();resetForm();renderQueue();message(localToken?'追加リストに反映しました。「保存して公開」でサイトに反映できます。':'追加リストに反映しました。「更新版を書き出す」でHTMLに保存できます。');
+    } catch(error) {message(error.message,true);}
+  };
+  document.querySelectorAll('[data-add]').forEach(button=>button.onclick=()=> {
+    optionField=button.dataset.add;$('optionValue').value='';
+    $('optionTitle').textContent=({status:'種別',group:'研究分野',source:$('section').value==='media'?'サイト名':'掲載先',city:'都市',country:'国'}[optionField])+'を追加';
+    $('optionDialog').showModal();$('optionValue').focus();
+  });
+  $('cancelOption').onclick=()=>$('optionDialog').close();
+  $('optionForm').onsubmit=event=> {
+    event.preventDefault();const value=P.normalizeOption($('optionValue').value);
+    if(!value) return;
+    const fieldKey=optionKey(optionField), values=options[fieldKey];
+    const existing=values.find(x=>x.toLowerCase()===value.toLowerCase());
+    if(!existing) values.push(value);
+    fillSelect(optionField,values,['city','country'].includes(optionField)?'選択してください':'',existing||value);
+    pendingOptions=true;$('optionDialog').close();persist();preview();renderQueue();
+  };
+  function download(text,name) {
+    const url=URL.createObjectURL(new Blob([text],{type:'text/html;charset=utf-8'}));
+    const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }
+  function exported() {return P.build(source,entries,options);}
+  function acceptedSave(result,handle) {
+    source=result;sourceHandle=handle;entries=[];pendingOptions=false;info=P.read(source);
+    resetForm();renderQueue();showExisting();persist();message('保存しました。さらに項目を追加できます。');
+  }
+  $('exportFile').onclick=async()=> {
+    try {
+      const result=exported();
+      if(typeof window.showSaveFilePicker==='function') {
+        const handle=await window.showSaveFilePicker({suggestedName:'index.html',types:[{description:'HTML',accept:{'text/html':['.html']}}]});
+        if(sourceHandle && await handle.isSameEntry(sourceHandle) && await (await sourceHandle.getFile()).text()!==source) throw new Error('読み込み後に元ファイルが変更されています。最新版を開き直してください。');
+        const stream=await handle.createWritable();await stream.write(result);await stream.close();acceptedSave(result,handle);
+      } else {
+        download(result,'index.html');
+        message('更新版HTMLをダウンロードしました。保存先のファイルを確認してから、元の index.html と置き換えてください。追加リストは確認用に残しています。');
+      }
+    } catch(error) {if(error.name!=='AbortError') message(error.message,true);}
+  };
+  $('saveOriginal').onclick=async()=> {
+    try {
+      if(!sourceHandle) return;
+      const result=exported(), current=await (await sourceHandle.getFile()).text();
+      if(current!==source) throw new Error('読み込み後に元ファイルが変更されています。上書きせず、最新版を開き直してください。');
+      const stream=await sourceHandle.createWritable();await stream.write(result);await stream.close();acceptedSave(result,sourceHandle);
+    } catch(error) {if(error.name!=='AbortError') message(error.message,true);}
+  };
+  function setBusy(value) {
+    busy=value;
+    $('entryFields').disabled=value || !source;
+    $('queueList').inert=value;
+    $('restoreDraft').disabled=value;
+    $('publishFile').textContent=value?'保存・送信中…':'保存して公開';
+    renderQueue();
+  }
+  async function localRequest(path,payload) {
+    const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Editor-Token':localToken},body:JSON.stringify(payload)});
+    const result=await response.json();
+    if(!response.ok) throw new Error(result.error || '保存・公開できませんでした。');
+    return result;
+  }
+  function published(result) {
+    pushPending=!result.pushed;
+    if(result.pushed) {
+      message('保存・commit・pushが完了しました。サイトへの反映には少し時間がかかります。');
+      const a=document.createElement('a');a.href='https://wyeueyw.github.io/';a.target='_blank';a.rel='noopener noreferrer';a.textContent='公開サイトを開く ↗';
+      notice.append(document.createElement('br'),a);
+    } else {
+      message('HTMLは保存しました。公開処理でエラーが発生しました。\n'+result.error,true);
+      // A commit failure needs another save; a completed commit needs a push retry.
+      pushPending=!!result.committed;
+    }
+  }
+  $('publishFile').onclick=async()=> {
+    if(busy) return;
+    try {
+      const next=exported();setBusy(true);message('index.html を保存し、GitHubへ送信しています…');
+      const result=await localRequest('/api/publish',{html:next,baseHash});
+      if(result.saved) {baseHash=result.baseHash;acceptedSave(next,null);}
+      published(result);
+    } catch(error) {message(error.message+'\n追加リストは保持しています。',true);}
+    finally {setBusy(false);}
+  };
+  $('retryPush').onclick=async()=> {
+    if(busy) return;
+    try {setBusy(true);message('保存済みの変更をGitHubへ再送信しています…');published(await localRequest('/api/push',{}));}
+    catch(error) {message(error.message,true);}
+    finally {setBusy(false);}
+  };
+  savedDraft=storageRead();
+  if(savedDraft?.options) options=P.mergeOptions(P.defaults,savedDraft.options);
+  if(savedDraft?.source && (savedDraft.entries?.length || savedDraft.pendingOptions)) $('restoreDraft').hidden=false;
+  $('restoreDraft').onclick=()=> {
+    try {
+      if(localToken && (!source || savedDraft.source!==source)) throw new Error('前回の作業と現在の index.html が異なります。現在のファイルに合わせて入力し直してください。');
+      if(source && !confirm('前回の作業に切り替えますか？')) return;
+      info=P.read(savedDraft.source);source=savedDraft.source;entries=Array.isArray(savedDraft.entries)?savedDraft.entries:[];
+      options=P.mergeOptions(P.defaults,savedDraft.options);sourceHandle=null;pendingOptions=true;
+      $('entryFields').disabled=false;$('restoreDraft').hidden=true;$('fileName').textContent=localToken?'index.html · 前回の作業を復元':'前回の作業 · 保存時は「更新版を書き出す」を使用';
+      resetForm();renderQueue();showExisting();message('前回の追加リストを復元しました。');
+    } catch(error){message(error.message,true);}
+  };
+  window.addEventListener('beforeunload',event=>{if(busy||entries.length||pendingOptions){event.preventDefault();event.returnValue='';}});
+  // Hosted copies can read their adjacent public page; local files use the picker.
+  if(localToken) {
+    $('openFile').hidden=true;$('saveOriginal').hidden=true;$('publishFile').hidden=false;
+    $('exportFile').classList.remove('primary');$('exportFile').textContent='HTMLを書き出す';
+    $('workflow').textContent='入力する → 追加リストに入れる → 保存して公開';
+    fetch('/api/page',{cache:'no-store'})
+      .then(response=>{if(!response.ok) throw new Error('ファイルを読み込めませんでした。');return response.json();})
+      .then(async result=>{
+        await importFile(new File([result.html],'index.html',{type:'text/html'}),null,true);baseHash=result.baseHash;
+        pushPending=!!result.pendingPush;renderQueue();
+        message(pushPending?'前回の変更がまだ送信されていません。「pushを再試行」で送信できます。':'MY PAGE の index.html を読み込みました。「保存して公開」で保存からpushまで行います。');
+      }).catch(error=>message(error.message,true));
+  } else if (/^https?:$/.test(window.location.protocol)) {
+    fetch(new URL('./index.html', window.location.href), { cache: 'no-store' })
+      .then(response => { if (!response.ok) throw new Error('HTTP ' + response.status); return response.text(); })
+      .then(text => { if (!source) return importFile(new File([text], 'index.html', {type: 'text/html'}),null,true); })
+      .catch(() => message('index.html を開くボタンから、編集するファイルを選んでください。'));
+  }
+  updateFields(true);$('year').value=new Date().getFullYear();$('authors').value='Yu Ohta';
+})();
+
+    </script>
+  </body>
+</html>
