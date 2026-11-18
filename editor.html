@@ -162,10 +162,10 @@
   const hasClass = (attrs, name) => (attrs.class || '').split(/\s+/).includes(name);
   function elements(source) {
     const stack = [], result = [];
-    const token = /<!--[\s\S]*?-->|<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>|<\/?[a-z][^>]*>/gi;
+    const token = /\x3c!--[\s\S]*?-->|<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>|<\/?[a-z][^>]*>/gi;
     const voids = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr','path','circle','polygon','rect','line','polyline','stop']);
     for (const m of source.matchAll(token)) {
-      if (m[0].startsWith('<!--') || m[1]) continue;
+      if (m[0].startsWith('\x3c!--') || m[1]) continue;
       const tag = /^<\/?([\w-]+)/.exec(m[0])[1].toLowerCase();
       if (m[0][1] === '/') {
         const i = stack.findLastIndex(x => x.tag === tag);
@@ -206,7 +206,7 @@
           date:classText(source,a,'item-dateline'),source:classText(source,a,'item-source'),status:classText(source,a,'status')});
       }
     }
-    const settings = source.match(/<script\b[^>]*\bid="page-editor-settings"[^>]*>([\s\S]*?)<\/script>/i);
+    const settings = source.match(/\x3cscript\b[^>]*\bid="page-editor-settings"[^>]*>([\s\S]*?)<\/script>/i);
     if (settings) { try { result.settings=JSON.parse(settings[1]); } catch {} }
     return result;
   }
@@ -347,8 +347,8 @@
     let result=source;
     for(const entry of entries) result=insert(result,entry);
     const json=JSON.stringify(options,null,2).replace(/</g,'\\u003c').replace(/&/g,'\\u0026');
-    const config=`    <script type="application/json" id="page-editor-settings">\n${json}\n    <\/script>`;
-    const existing=/<script\b[^>]*\bid="page-editor-settings"[^>]*>[\s\S]*?<\/script>/i;
+    const config=`    \x3cscript type="application/json" id="page-editor-settings">\n${json}\n    <\/script>`;
+    const existing=/\x3cscript\b[^>]*\bid="page-editor-settings"[^>]*>[\s\S]*?<\/script>/i;
     if(existing.test(result)) result=result.replace(existing,config.trimStart());
     else result=result.replace(/  <\/body>/,config+'\n  </body>');
     return result;
@@ -525,9 +525,15 @@
     const url=URL.createObjectURL(new Blob([text],{type:'text/html;charset=utf-8'}));
     const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
   }
-  function exported() {return P.build(source,entries,options);}
+  function exported() {
+    if(['title','titleURL','byline','description'].some(id=>!$(id).disabled && P.clean($(id).value)) || [...$('links').querySelectorAll('input')].some(input=>P.clean(input.value))) {
+      throw new Error('入力中の項目を先に追加リストに入れてください。追加しない場合は「入力をリセット」で消去できます。');
+    }
+    return P.build(source,entries,options);
+  }
   function acceptedSave(result,handle) {
     source=result;sourceHandle=handle;entries=[];pendingOptions=false;info=P.read(source);
+    savedDraft=null;$('restoreDraft').hidden=true;
     resetForm();renderQueue();showExisting();persist();message('保存しました。さらに項目を追加できます。');
   }
   $('exportFile').onclick=async()=> {
