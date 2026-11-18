@@ -1,0 +1,5 @@
+.DS_Store
+.editor-backups/
+.editor-state.json
+*.bak
+__pycache__/
