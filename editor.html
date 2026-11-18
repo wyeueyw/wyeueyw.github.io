@@ -27,8 +27,27 @@
       header p, .muted { color: var(--soft); margin: 5px 0 0; font-size: 12px; }
       .toolbar { width: calc(100% - 60px); max-width: 1260px; margin: 0 auto; padding: 19px 0; border-block: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
       #fileName { flex: 1; min-width: 170px; font-size: 12px; color: var(--soft); overflow-wrap: anywhere; }
+      .toolbar { position: sticky; top: 0; z-index: 20; background: var(--paper); }
       .layout { max-width: 1320px; margin: auto; padding: 28px 30px 80px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 36px; }
       .panel { min-width: 0; }
+      .view-tabs { display: flex; gap: 8px; flex-wrap: wrap; width: calc(100% - 60px); max-width: 1260px; margin: 22px auto 0; }
+      .view-tabs button[aria-pressed=true] { background: var(--ink); color: white; }
+      .existing-tools { padding: 0 0 25px; margin: 0 0 26px; border-bottom: 1px solid var(--line); }
+      .existing-tools .actions { margin-top: 12px; }
+      .section-setting { display: grid; grid-template-columns: 82px minmax(0,1fr) 64px; gap: 12px; align-items: center; padding: 8px 0; }
+      .section-setting label { margin: 0; }
+      .map-setting { display: grid; grid-template-columns: 135px minmax(0,1fr) 64px; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+      .map-setting textarea { min-height: 75px; }
+      .map-setting label { margin: 0; }
+      .settings-title { margin: 10px 0 4px; }
+      .preview-controls { display: flex; gap: 16px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+      .preview-controls h2 { margin: 0; white-space: nowrap; }
+      .preview-controls select { width: auto; max-width: 200px; }
+      iframe.page-preview { height: 660px; }
+      .danger { color: #894a38; }
+      .check-row { display: flex; gap: 8px; align-items: center; }
+      .check-row input { width: auto; }
+
       h2 { font-size: 17px; font-weight: 500; margin: 0 0 18px; }
       h3 { font-size: 14px; margin: 0 0 8px; font-weight: 500; }
       fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
@@ -67,14 +86,19 @@
       .empty { font-size: 12px; padding: 22px 0; color: var(--soft); }
       @media (max-width: 1080px) {
         .layout { grid-template-columns: 1fr; gap: 35px; }
-        .toolbar, #notice { width: calc(100% - 48px); margin-inline: 24px; }
+        .toolbar, #notice, .view-tabs { width: calc(100% - 48px); margin-inline: 24px; }
         header { align-items: flex-start; }
         #saveOriginal { display: none; }
       }
       @media (max-width: 500px) {
         header, .layout { padding-inline: 18px; }
         header { flex-direction: column; }
-        .toolbar, #notice { width: calc(100% - 36px); margin-inline: 18px; }
+        .toolbar, #notice, .view-tabs { width: calc(100% - 36px); margin-inline: 18px; }
+        .map-setting { grid-template-columns: minmax(0,1fr) 64px; }
+        .map-setting > label:first-child { grid-column: 1 / -1; }
+        .section-setting { grid-template-columns: 1fr 64px; }
+        .section-setting > label:first-child { grid-column: 1 / -1; }
+
         .fields { grid-template-columns: 1fr; }
         .links-row { grid-template-columns: 1fr auto; }
         .links-row input:first-child { grid-column: 1 / -1; }
@@ -83,7 +107,7 @@
   </head>
   <body>
     <header>
-      <div><div class="eyebrow">YU OHTA / EDITOR</div><h1>項目を追加する</h1><p id="workflow">HTMLを開く → 入力する → 追加リストに入れる → 保存する</p></div>
+      <div><div class="eyebrow">YU OHTA / EDITOR</div><h1>サイトを編集する</h1><p id="workflow">HTMLを開く → 編集・削除 → 変更リストに反映 → 保存する</p></div>
       <button id="restoreDraft" hidden>前回の作業を復元</button>
     </header>
     <div class="toolbar">
@@ -96,8 +120,20 @@
       <button id="publishFile" class="primary" disabled hidden>保存して公開</button>
     </div>
     <div id="notice" role="status" aria-live="polite" hidden></div>
+    <nav class="view-tabs" aria-label="編集する内容">
+      <button type="button" data-view-button="items" aria-pressed="true">項目の編集・削除</button>
+      <button type="button" data-view-button="site" aria-pressed="false">プロフィール・連絡先</button>
+      <button type="button" data-view-button="map" aria-pressed="false">研究マップ</button>
+    </nav>
     <main class="layout">
       <section class="panel">
+        <div data-editor-view="items">
+        <div id="existingTools" class="existing-tools">
+          <h2>登録済みの項目 <span id="existingCount" class="muted"></span></h2>
+          <label for="existingSelect">編集・削除する項目</label>
+          <select id="existingSelect"><option value="">ファイルを読み込んでください</option></select>
+          <div class="actions"><button id="editExisting" type="button" disabled>編集する</button><button id="deleteExisting" class="danger" type="button" disabled>削除する</button><button id="newEntry" type="button">＋ 新規追加</button></div>
+        </div>
         <h2 id="formTitle">新しい項目</h2>
         <form id="entryForm">
           <fieldset id="entryFields" disabled>
@@ -115,19 +151,46 @@
               <div class="field wide" data-for="research"><label for="authors">著者<span class="required">必須</span></label><textarea id="authors" rows="2" placeholder="Yu Ohta"></textarea><p class="hint">1行に1名。入力した順序で表示します。</p></div>
               <div class="field wide" data-for="activity media" hidden><label id="bylineLabel" for="byline">発表・参加内容</label><input id="byline" placeholder="Poster HP-46 · Presentation title"></div>
               <div class="field wide"><label for="related">関連する項目へのページ内リンク</label><select id="related"><option value="">なし</option></select><p class="hint">リンク先が画面中央に来ます。追加した項目も選べます。</p></div>
+              <div id="relatedLabelField" class="field wide" hidden><label for="relatedLabel">ページ内リンクの表示名</label><input id="relatedLabel" placeholder="Q-ROU"><p class="hint">発表・参加内容に同じ文字があれば、その部分がリンクになります。</p></div>
               <div class="field wide"><label for="description">説明</label><textarea id="description" rows="3" placeholder="イベントの概要や研究内容を簡潔に。"></textarea></div>
               <div class="wide line"><div class="field-label">関連リンク</div><div id="links"></div><button id="addLink" type="button">＋ リンクを追加</button></div>
             </div>
-            <div class="actions"><button id="queueButton" class="primary" type="submit">追加リストに入れる</button><button id="resetForm" type="button">入力をリセット</button></div>
+            <div class="actions"><button id="queueButton" class="primary" type="submit">追加を変更リストに入れる</button><button id="resetForm" type="button">入力をリセット</button></div>
           </fieldset>
         </form>
-        <details><summary>使い方・保存について</summary><p>選択肢は各プルダウン横の「＋」から追加できます。追加した選択肢はこのブラウザに保存され、書き出すHTMLにも引き継がれます。</p><p>項目は日付の新しい順に入り、RESEARCHは研究分野ごとに整理されます。保存前の追加リストは編集・削除できます。</p><p>「Edit Website.command」をダブルクリックして起動すると、「保存して公開」で保存・commit・pushを続けて行います。サイトへの反映には少し時間がかかります。送信に失敗した内容はローカルに残り、pushを再試行できます。</p><p>HTMLだけを開いた場合は「更新版を書き出す」で保存します。ブラウザによってはダウンロードになるため、保存したファイルで元の index.html を置き換えてください。</p></details>
+        <details><summary>使い方・保存について</summary><p>編集は「変更リストに反映」、削除は「削除する」で予約します。「保存して公開」を押すまでは取り消せます。削除先へのページ内リンクは、リンクを外して文字を残します。</p><p>プルダウン横の「＋」で選択肢を追加できます。保存後も引き継がれます。項目は日付順、RESEARCHは研究分野ごとに配置します。</p><p>「Edit Website.command」で起動すると、保存・commit・pushまで行います。送信に失敗した内容はローカルに残り、再試行できます。HTMLだけで開いた場合は、更新版の書き出しを使ってください。</p></details>
+        </div>
+        <div data-editor-view="site" hidden>
+          <h2>プロフィール・連絡先</h2>
+          <p class="hint">不要な文章や連絡先は空欄にできます。章全体は「表示」のチェックを外すとサイトから非表示になります。</p>
+          <form id="siteForm"><fieldset id="siteFields" disabled><div class="fields">
+              <div class="field wide"><label for="site-name">表示名</label><input id="site-name" required></div>
+              <div class="field wide"><label for="site-location">拠点</label><input id="site-location"></div>
+              <div class="field wide"><label for="site-affiliation">所属</label><input id="site-affiliation"></div>
+              <div class="field wide"><label for="site-profile">プロフィール本文</label><textarea id="site-profile" rows="3"></textarea></div>
+              <div class="field wide"><label for="site-email">メールアドレスの表示</label><input id="site-email"></div>
+              <div class="field wide"><label for="site-schoolCaption">学校・所属欄の見出し</label><input id="site-schoolCaption"></div>
+              <div class="field wide"><label for="site-schoolName">学校・所属名</label><input id="site-schoolName"></div>
+              <div class="field wide"><label for="site-schoolURL">学校・所属のURL</label><input id="site-schoolURL"></div>
+              <div class="field wide"><label for="site-address">所在地・住所</label><input id="site-address"></div>
+              <div class="field wide"><label for="site-copyright">フッターの著作権表記</label><input id="site-copyright"></div>
+              <div class="field wide"><label for="site-pageTitle">ブラウザのタイトル</label><input id="site-pageTitle" required></div>
+              <div class="field wide"><label for="site-description">検索結果の説明文</label><textarea id="site-description" rows="3"></textarea></div>
+              <div class="wide line"><h3>SNS・外部リンク</h3><div id="socialLinks"></div><button id="addSocial" type="button">＋ SNS・外部リンクを追加</button></div>
+              <div class="wide line"><h3>章タイトル・表示</h3><div id="sectionSettings"></div></div>
+              <div class="wide"><label class="check-row"><input id="mapVisible" type="checkbox">トップの研究マップを表示</label></div>
+            </div><div class="actions"><button class="primary" type="submit">プロフィール・連絡先の変更を反映</button><button id="resetSite" type="button">入力を戻す</button></div></fieldset></form>
+        </div>
+        <div data-editor-view="map" hidden>
+          <h2>研究マップ</h2>
+          <p class="hint">結晶の形・配置を保ってラベルを変更できます。改行は2行まで。親を非表示にすると、その下の概念と接続線も非表示になります。</p>
+          <form id="mapForm"><fieldset id="mapFields" disabled><div id="mapRows"></div><div class="actions"><button class="primary" type="submit">研究マップの変更を反映</button><button id="resetMap" type="button">入力を戻す</button></div></fieldset></form>
+        </div>
       </section>
       <section class="panel">
-        <h2>表示プレビュー</h2>
+        <div class="preview-controls"><h2>表示プレビュー</h2><select id="previewMode" aria-label="プレビューの種類"><option value="item">入力中の項目</option><option value="page">ページ全体</option></select></div>
         <div class="preview"><div class="preview-head">ITEM PREVIEW</div><iframe id="preview" title="追加する項目のプレビュー" sandbox></iframe><p id="previewHint" class="hint">ファイルを開き、タイトルなどを入力すると表示されます。</p></div>
-        <div class="queue"><h2>追加リスト <span id="queueCount" class="muted">0件</span></h2><div id="queueList"><p class="empty">追加予定の項目はまだありません。</p></div></div>
-        <details><summary>読み込んだ項目 <span id="existingCount"></span></summary><ul id="existing"></ul></details>
+        <div class="queue"><h2>変更リスト <span id="queueCount" class="muted">0件</span></h2><div id="queueList"><p class="empty">未公開の変更はありません。</p></div></div>
       </section>
     </main>
     <dialog id="optionDialog" aria-labelledby="optionTitle">
@@ -247,7 +310,7 @@
     const entry={...input};
     for (const key of ['section','group','year','date','city','country','source','status','title','titleURL','byline','relatedId','relatedLabel']) entry[key]=clean(entry[key]);
     entry.description=String(entry.description || '').trim();
-    entry.authors=String(entry.authors || '').split('\n').map(clean).filter(Boolean);
+    entry.authors=(Array.isArray(entry.authors)?entry.authors:String(entry.authors || '').split('\n')).map(clean).filter(Boolean);
     if (!['research','activity','media'].includes(entry.section)) throw new Error('章を選んでください。');
     if (!entry.title) throw new Error('タイトルを入力してください。');
     if (!entry.status) throw new Error('種別を選んでください。');
@@ -269,6 +332,8 @@
     });
     entry.status=normalizeOption(entry.status);
     entry.source=normalizeOption(entry.source);
+    if(entry.section==='activity') {entry.year='';entry.source='';entry.group='';entry.authors=[];}
+    else {entry.date='';entry.city='';entry.country='';if(entry.section==='media'){entry.group='';entry.authors=[];}}
     if (entry.relatedId && !/^[A-Za-z][\w:.-]*$/.test(entry.relatedId)) throw new Error('関連項目のIDが不正です。');
     return entry;
   }
@@ -292,7 +357,10 @@
     lines.push('              </h3>');
     if(e.byline || e.relatedId) {
       let text=escape(e.byline);
-      if(e.relatedId) text+=`${text?' · ':''}Related work: <a href="#${escape(e.relatedId)}" style="text-decoration: underline; text-underline-offset: 3px;">${escape(e.relatedLabel)}</a>`;
+      if(e.relatedId) {
+        const label=escape(e.relatedLabel), link=`<a href="#${escape(e.relatedId)}" style="text-decoration: underline; text-underline-offset: 3px;">${label}</a>`;
+        text=label && text.includes(label)?text.replace(label,()=>link):text+`${text?' · ':''}Related work: ${link}`;
+      }
       lines.push('              <div class="byline">',`                ${text}`,'              </div>');
     }
     if(e.description) {
@@ -358,280 +426,643 @@
 
     </script>
     <script>
+/* Small source patches keep the existing page, artwork and inline formatting intact. */
 (() => {
   'use strict';
-  const P=PageEditor, $=id=>document.getElementById(id), key='yu-ohta-page-editor-v1';
-  const localToken=document.querySelector('meta[name="local-editor-token"]')?.content || '';
-  let baseHash='', busy=false, pushPending=false;
-  let source='', sourceHandle=null, info=null, entries=[], editingId='', optionField='', savedDraft=null;
-  let options=P.mergeOptions(P.defaults), pendingOptions=false;
-  const form=$('entryForm'), notice=$('notice');
-  function message(text,error=false) { notice.hidden=false;notice.textContent=text;notice.classList.toggle('error',error); }
-  function storageRead() { try {return JSON.parse(localStorage.getItem(key)||'null');}catch{return null;} }
+  const P=PageEditor, oldRead=P.read, esc=P.escape, clean=P.clean;
+  const inside=(a,b)=>b && a.start>=b.openEnd && a.end<=b.closeStart;
+  const cls=(n,c)=>(n.attrs.class||'').split(/\s+/).includes(c);
+  const inner=(s,n)=>n?s.slice(n.openEnd,n.closeStart):'';
+  const text=(s,n)=>P.plain(inner(s,n));
+  const find=(nodes,c,parent)=>nodes.find(n=>cls(n,c)&&(!parent||inside(n,parent)));
+  const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
+  const same=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
+  function edits(source,changes) {
+    const ordered=changes.filter(Boolean).sort((a,b)=>b.start-a.start||(b.order||0)-(a.order||0));
+    let last=source.length;
+    for(const change of ordered) {
+      if(change.end>last || change.start>change.end) throw new Error('編集範囲が重なっています。変更を取り消してやり直してください。');
+      source=source.slice(0,change.start)+change.value+source.slice(change.end);last=change.start;
+    }
+    return source;
+  }
+  const replaceInner=(n,value)=>n?{start:n.openEnd,end:n.closeStart,value}:null;
+  function attr(tag,name,value) {
+    const pattern=new RegExp('\\s'+name+'(?:\\s*=\\s*(?:"[^"]*"|\'[^\']*\'|[^\\s>]+))?(?=\\s|/?>)','i');
+    const addition=value===null?'':` ${name}="${esc(value)}"`;
+    if(pattern.test(tag)) return tag.replace(pattern,()=>addition);
+    return value===null?tag:tag.replace(/\s*\/?>(?=$)/,end=>addition+end);
+  }
+  function showTag(tag,visible,own=true) {
+    let style=tag.match(/\bstyle="([^"]*)"/i)?.[1] || '';
+    style=style.replace(/(?:^|;)\s*display\s*:\s*none\s*;?/gi,';').replace(/^;+|;+$/g,'').trim();
+    if(!visible) style+=(style?'; ':'')+'display: none;';
+    tag=attr(tag,'style',style||null);
+    return attr(tag,'data-editor-hidden',own?null:'true');
+  }
+  function blockRange(source,n) {
+    const start=source.lastIndexOf('\n',n.start-1)+1;
+    const endline=source.indexOf('\n',n.end);
+    return {start:/^\s*$/.test(source.slice(start,n.start))?start:n.start,
+      end:endline>=0&&/^\s*$/.test(source.slice(n.end,endline))?endline+1:n.end};
+  }
+  function linkList(source,parent,nodes) {
+    return nodes.filter(n=>n.tag==='a'&&inside(n,parent)).map(n=>({label:text(source,n).replace(/\s*↗$/,''),url:n.attrs.href||''}));
+  }
+  function read(source) {
+    const result=oldRead(source), nodes=P.elements(source), used=[];
+    result.entries=[];
+    for(const section of ['research','activity','media']) {
+      const region=nodes.find(n=>n.tag==='section'&&n.attrs.id===section);
+      const headings=nodes.filter(n=>n.tag==='h3'&&cls(n,'research-group')&&inside(n,region));
+      for(const a of nodes.filter(n=>n.tag==='article'&&inside(n,region))) {
+        const titleNode=nodes.find(n=>n.tag==='h3'&&inside(n,a));
+        const titleLink=nodes.find(n=>n.tag==='a'&&inside(n,titleNode));
+        const byline=find(nodes,'byline',a), description=find(nodes,'item-description',a), date=text(source,find(nodes,'item-dateline',a));
+        const related=nodes.find(n=>n.tag==='a'&&inside(n,byline)&&n.attrs.href?.startsWith('#'));
+        const title=text(source,titleNode).replace(/\s*↗$/,''), id=a.attrs.id || P.uniqueId(source,used,title);
+        const dateParts=date.match(/^(\d{4})\.(\d{2})\.(\d{2}),\s*(.*),\s*([^,]+)$/);
+        const group=headings.filter(n=>n.start<a.start).at(-1);
+        const e={id,key:id,originalId:a.attrs.id||'',section,group:text(source,group),title,titleURL:titleLink?.attrs.href||'',
+          dateline:date,year:section==='activity'?'':date,date:dateParts?`${dateParts[1]}-${dateParts[2]}-${dateParts[3]}`:'',
+          city:dateParts?.[4]||'',country:dateParts?.[5]||'',source:text(source,find(nodes,'item-source',a)),
+          status:text(source,find(nodes,'status',a)),byline:text(source,byline),description:text(source,description),
+          authors:section==='research'?text(source,byline).replace(/^Authors?:\s*/i,'').split('·').map(clean).filter(Boolean):[],
+          relatedId:related?.attrs.href.slice(1)||'',relatedLabel:text(source,related),
+          links:linkList(source,find(nodes,'pub-links',a),nodes),raw:source.slice(a.start,a.end),node:a};
+        used.push(e);result.entries.push(e);
+      }
+    }
+    result.site=readSite(source,nodes);result.map=readMap(source,nodes);
+    return result;
+  }
+  function prepare(source) {
+    const data=read(source);
+    const changes=data.entries.filter(e=>!e.originalId).map(e=>({start:e.node.start,end:e.node.openEnd,
+      value:attr(attr(source.slice(e.node.start,e.node.openEnd),'id',e.id),'data-anchor-highlight','')}));
+    return edits(source,changes);
+  }
+  const userFields=['section','group','year','date','city','country','source','status','title','titleURL','byline','description','authors','relatedId','relatedLabel','links'];
+  function record(entry) {return Object.fromEntries(userFields.map(k=>[k,entry[k]??'']));}
+  function relatedMarkup(e) {
+    const r=P.render(e), nodes=P.elements(r);return inner(r,find(nodes,'byline')).trim();
+  }
+  function patchArticle(before,after) {
+    if(before.section!==after.section) return P.render(after).trimStart();
+    let raw=before.raw;const nodes=P.elements(raw), changes=[];
+    const generated=P.render(after), generatedNodes=P.elements(generated);
+    function field(name,changed) {
+      if(!changed) return;
+      const old=find(nodes,name), fresh=find(generatedNodes,name);
+      if(old&&fresh) changes.push(replaceInner(old,inner(generated,fresh)));
+      else if(old) changes.push({...blockRange(raw,old),value:''});
+      else if(fresh) {
+        const main=find(nodes,'item-main'), anchor=nodes.find(n=>n.tag==='h3'&&inside(n,main));
+        const point=name==='item-source'?anchor.start:name==='byline'?anchor.end:main.closeStart;
+        const snippet=generated.slice(fresh.start,fresh.end);
+        changes.push({start:point,end:point,order:['item-source','byline','item-description','pub-links'].indexOf(name),value:(name==='item-source'?'':'\n              ')+snippet+(name==='item-source'?'\n              ':'\n            ')});
+      }
+    }
+    field('item-dateline',before.dateline!==after.dateline);
+    field('item-source',before.source!==after.source);
+    field('status',before.status!==after.status);
+    const heading=nodes.find(n=>n.tag==='h3');
+    if(before.title!==after.title||before.titleURL!==after.titleURL) changes.push(replaceInner(heading,inner(generated,generatedNodes.find(n=>n.tag==='h3'))));
+    field('byline',before.byline!==after.byline||before.relatedId!==after.relatedId||before.relatedLabel!==after.relatedLabel);
+    field('item-description',before.description!==after.description);
+    field('pub-links',!same(before.links,after.links));
+    raw=edits(raw,changes);
+    return raw;
+  }
+  function insertRaw(source,entry,raw) {
+    const nodes=P.elements(source), region=nodes.find(n=>n.tag==='section'&&n.attrs.id===entry.section);
+    const list=find(nodes,'research-list',region);
+    let candidates=nodes.filter(n=>n.tag==='article'&&inside(n,list)), end=list.closeStart, prefix='';
+    if(entry.section==='research') {
+      const groups=nodes.filter(n=>n.tag==='h3'&&cls(n,'research-group')&&inside(n,list));
+      const group=groups.find(n=>text(source,n)===entry.group);
+      if(group) {
+        end=groups.find(n=>n.start>group.start)?.start??list.closeStart;
+        candidates=candidates.filter(n=>n.start>group.end&&n.end<=end);
+      } else {candidates=[];prefix=`          <h3 class="research-group">${esc(entry.group)}</h3>\n\n`;}
+    }
+    const dateKey=s=>(s.match(/^\d{4}(?:\.\d{2}\.\d{2})?/)?.[0]||'').padEnd(10,'.00');
+    const before=candidates.find(n=>dateKey(text(source,find(nodes,'item-dateline',n)))<dateKey(entry.dateline));
+    let position=before?.start??end, start=source.lastIndexOf('\n',position-1)+1;
+    if(/^\s*$/.test(source.slice(start,position))) position=start;
+    return source.slice(0,position)+prefix+'          '+raw.trimStart()+'\n\n'+source.slice(position);
+  }
+  function build(source,operations,options,site=null,map=null) {
+    let output=prepare(source);const data=read(output), changes=[], additions=[], removed=new Set();
+    const touched=new Set();
+    for(const op of operations) {
+      const entry=op.entry, id=op.id||entry?.id;
+      if(touched.has(id)) throw new Error('同じ項目の変更が重複しています。');touched.add(id);
+      const before=data.entries.find(e=>e.id===id);
+      if(op.kind==='add') {
+        if(before) throw new Error('同じ項目のIDが既に使われています。');
+        additions.push({entry,raw:P.render(entry)});continue;
+      }
+      if(!before) throw new Error('編集対象の項目が見つかりません。最新版を読み込んでください。');
+      if(op.kind==='delete') {
+        removed.add(id);changes.push({...blockRange(output,before.node),value:''});continue;
+      }
+      if(op.kind!=='update') throw new Error('変更の種類が不正です。');
+      const raw=patchArticle(before,entry), move=before.section!==entry.section||before.group!==entry.group||before.dateline!==entry.dateline;
+      if(move) {changes.push({...blockRange(output,before.node),value:''});additions.push({entry,raw});}
+      else if(raw!==before.raw) changes.push({start:before.node.start,end:before.node.end,value:raw});
+    }
+    output=edits(output,changes);
+    for(const item of additions) output=insertRaw(output,item.entry,item.raw);
+    if(removed.size) {
+      // Retain the readable reference when its destination has been deleted.
+      output=edits(output,P.elements(output).filter(n=>n.tag==='a'&&removed.has(n.attrs.href?.slice(1))&&n.attrs.href?.startsWith('#')).map(n=>({start:n.start,end:n.end,value:inner(output,n)})));
+    }
+    // Empty field headings should not linger after moving or deleting their last paper.
+    const nodes=P.elements(output), groups=nodes.filter(n=>n.tag==='h3'&&cls(n,'research-group'));
+    output=edits(output,groups.filter((g,i)=>!nodes.some(n=>n.tag==='article'&&n.start>g.end&&n.end<(groups[i+1]?.start??nodes.find(x=>x.tag==='section'&&x.attrs.id==='research').closeStart))).map(g=>({...blockRange(output,g),value:''})));
+    if(site) output=patchSite(output,site);
+    if(map) output=patchMap(output,map);
+    const finalNodes=P.elements(output), ids=new Set(finalNodes.map(n=>n.attrs.id).filter(Boolean));
+    if(finalNodes.filter(n=>n.attrs.id).length!==ids.size) throw new Error('ページ内のIDが重複しています。');
+    for(const a of finalNodes.filter(n=>n.tag==='a'&&n.attrs.href?.startsWith('#'))) {
+      if(!ids.has(a.attrs.href.slice(1))) throw new Error(`リンク先 ${a.attrs.href} がありません。リンク先を選び直してください。`);
+    }
+    if(!same(data.settings,options)) {
+      const json=JSON.stringify(options,null,2).replace(/</g,'\\u003c').replace(/&/g,'\\u0026');
+      const config=`\x3cscript type="application/json" id="page-editor-settings">\n${json}\n    <\/script>`;
+      const pattern=/\x3cscript\b[^>]*\bid="page-editor-settings"[^>]*>[\s\S]*?<\/script>/i;
+      output=pattern.test(output)?output.replace(pattern,()=>config):output.replace(/  <\/body>/,'    '+config+'\n  </body>');
+    }
+    return output;
+  }
+  function readSite(source,nodes=P.elements(source)) {
+    const hero=find(nodes,'hero-copy'), foot=find(nodes,'hero-foot'), school=find(nodes,'school-contact');
+    const location=inner(source,nodes.find(n=>n.tag==='p'&&inside(n,foot))).split(/<br\s*\/?>/i).map(P.plain);
+    const nav=find(nodes,'site-nav');
+    return {
+      name:text(source,nodes.find(n=>n.tag==='h1'&&inside(n,hero))), location:location[0]||'', affiliation:location.slice(1).join(' '),
+      profile:text(source,find(nodes,'profile-bio')),email:text(source,find(nodes,'email-link')),
+      social:linkList(source,find(nodes,'contact-actions'),nodes),
+      schoolCaption:text(source,find(nodes,'school-caption')),schoolName:text(source,find(nodes,'school-name')).replace(/\s*↗$/,''),
+      schoolURL:find(nodes,'school-name')?.attrs.href||'',address:text(source,nodes.find(n=>n.tag==='address'&&inside(n,school))),
+      copyright:text(source,nodes.find(n=>n.tag==='span'&&inside(n,find(nodes,'foot')))),
+      pageTitle:text(source,nodes.find(n=>n.tag==='title')),
+      description:(source.match(/<meta\s+name="description"\s+content="([^"]*)"/i)?.[1]||'').replace(/&quot;/g,'"').replace(/&amp;/g,'&'),
+      mapVisible:find(nodes,'research-map')?.attrs['data-editor-hidden']!=='true',
+      sections:['profile','research','activity','media','contact'].map(id=>{
+        const region=nodes.find(n=>n.attrs.id===id), heading=nodes.find(n=>n.tag==='h2'&&inside(n,region));
+        return {id,title:text(source,heading),visible:region?.attrs['data-editor-hidden']!=='true'};
+      })
+    };
+  }
+  function validateSite(site) {
+    const s={...site};
+    for(const k of ['name','location','affiliation','profile','email','schoolCaption','schoolName','schoolURL','address','copyright','pageTitle','description']) s[k]=String(s[k]||'').trim();
+    if(!s.name||!s.pageTitle) throw new Error('表示名とブラウザのタイトルを入力してください。');
+    s.social=(s.social||[]).filter(l=>clean(l.label)||clean(l.url)).map(link=>checkLink(link));
+    if(s.schoolURL) checkLink({label:s.schoolName||'School',url:s.schoolURL});
+    for(const section of s.sections) if(!clean(section.title)) throw new Error('章タイトルは空欄にできません。表示しない場合は表示のチェックを外してください。');
+    return s;
+  }
+  function checkLink(link) {
+    if(!clean(link.label)) throw new Error('リンクの表示名を入力してください。');
+    const u=new URL(clean(link.url));if(!['https:','http:','mailto:'].includes(u.protocol)) throw new Error('リンクは https:// などのURLを入力してください。');
+    return {label:clean(link.label).replace(/\s*↗$/,''),url:clean(link.url)};
+  }
+  function patchSite(source,value) {
+    const s=validateSite(value), before=readSite(source), nodes=P.elements(source), changes=[];
+    const changeText=(node,value,prior)=>{
+      if(value!==prior&&node) {
+        const raw=inner(source,node),prefix=raw.match(/^\s*/)[0],suffix=raw.match(/\s*$/)[0];
+        changes.push(replaceInner(node,prefix+esc(value)+suffix));
+      }
+    };
+    const hero=find(nodes,'hero-copy'), brand=find(nodes,'brand'), school=find(nodes,'school-contact');
+    if(s.name!==before.name) {
+      changeText(nodes.find(n=>n.tag==='h1'&&inside(n,hero)),s.name,before.name);
+      changeText(nodes.find(n=>n.tag==='span'&&inside(n,brand)),s.name,before.name);
+      changes.push({start:brand.start,end:brand.openEnd,value:attr(source.slice(brand.start,brand.openEnd),'aria-label',s.name+' home')});
+    }
+    if(s.location!==before.location||s.affiliation!==before.affiliation) {
+      const p=nodes.find(n=>n.tag==='p'&&inside(n,find(nodes,'hero-foot')));
+      changes.push(replaceInner(p,[s.location,s.affiliation].filter(Boolean).map(esc).join('<br>')));
+    }
+    changeText(find(nodes,'profile-bio'),s.profile,before.profile);
+    changeText(find(nodes,'email-link'),s.email,before.email);
+    changeText(find(nodes,'school-caption'),s.schoolCaption,before.schoolCaption);
+    if(s.schoolName!==before.schoolName||s.schoolURL!==before.schoolURL) {
+      const n=find(nodes,'school-name');
+      changes.push(replaceInner(n,esc(s.schoolName)+(s.schoolName&&s.schoolURL?' ↗':'')));
+      changes.push({start:n.start,end:n.openEnd,value:attr(source.slice(n.start,n.openEnd),'href',s.schoolURL||null)});
+    }
+    changeText(nodes.find(n=>n.tag==='address'&&inside(n,school)),s.address,before.address);
+    changeText(nodes.find(n=>n.tag==='span'&&inside(n,find(nodes,'foot'))),s.copyright,before.copyright);
+    changeText(nodes.find(n=>n.tag==='title'),s.pageTitle,before.pageTitle);
+    if(s.description!==before.description) {
+      const m=source.match(/<meta\s+name="description"\s+content="[^"]*"[\s\S]*?>/i);
+      if(m) changes.push({start:m.index,end:m.index+m[0].length,value:attr(m[0],'content',s.description)});
+    }
+    if(!same(s.social,before.social)) changes.push(replaceInner(find(nodes,'contact-actions'),'\n'+s.social.map(l=>`              <a class="social-button mono" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)} ↗</a>`).join('\n')+'\n            '));
+    for(const section of s.sections) {
+      const old=before.sections.find(x=>x.id===section.id), region=nodes.find(n=>n.attrs.id===section.id), h=nodes.find(n=>n.tag==='h2'&&inside(n,region));
+      const nav=nodes.find(n=>n.tag==='a'&&n.attrs.href==='#'+section.id&&inside(n,find(nodes,'site-nav')));
+      changeText(h,section.title,old.title);changeText(nav,section.title,old.title);
+      if(section.visible!==old.visible) for(const n of [region,nav]) if(n)changes.push({start:n.start,end:n.openEnd,value:showTag(source.slice(n.start,n.openEnd),section.visible,section.visible)});
+    }
+    if(s.mapVisible!==before.mapVisible) {
+      const n=find(nodes,'research-map');changes.push({start:n.start,end:n.openEnd,value:showTag(source.slice(n.start,n.openEnd),s.mapVisible,s.mapVisible)});
+    }
+    return edits(source,changes);
+  }
+  const mapParents=[null,null,0,2,0,4,2,9,4,1,9,1,11,1,11,13,13];
+  const mapEdges=[[0,2],[2,3],[2,6],[0,4],[4,5],[4,8],[1,9],[9,10],[9,7],[1,11],[11,12],[11,14],[1,13],[13,15],[13,16]];
+  const mapFaint=[3,2,6,4,5,10,7,7,11,14,16,15];
+  const widths=[130,105,95,52,105,80,116,100,90,80,94,100,58,108,78,90,90];
+  function mapParts(source,nodes=P.elements(source)) {
+    const main=find(nodes,'mine-main'), supporting=find(nodes,'mine-label');
+    return {nodes,texts:nodes.filter(n=>n.tag==='text'&&(inside(n,main)||inside(n,supporting))),stones:nodes.filter(n=>cls(n,'stone-sample')),veins:find(nodes,'veins')};
+  }
+  function readMap(source,nodes=P.elements(source)) {
+    const parts=mapParts(source,nodes);
+    return parts.texts.map((n,i)=>{
+      const spans=nodes.filter(x=>x.tag==='tspan'&&inside(x,n));
+      return {id:'map-'+i,parent:mapParents[i],label:spans.length?spans.map(x=>text(source,x)).join('\n'):text(source,n),visible:n.attrs['data-editor-hidden']!=='true'};
+    });
+  }
+  function patchMap(source,map) {
+    const before=readMap(source), parts=mapParts(source), changes=[], active=[];
+    if(map.length!==before.length) throw new Error('研究マップの構造が一致しません。');
+    function visible(i) {return active[i]??(active[i]=!!map[i].visible&&(mapParents[i]===null||visible(mapParents[i])));}
+    map.forEach((node,i)=>{
+      const old=before[i], n=parts.texts[i], lines=node.label.split('\n').map(clean).filter(Boolean);
+      if(!lines.length||lines.length>2||lines.some(s=>s.length>36)) throw new Error('マップのラベルは各行36文字以内・2行までにしてください。');
+      if(node.label!==old.label) {
+        const step=i<2?20:13, oldLines=old.label.split('\n').length, y=Number(n.attrs.y)+(oldLines-lines.length)*step/2;
+        const content=lines.map((line,k)=>`<tspan x="${n.attrs.x}"${k?` dy="${step}"`:''}${line.length*(i<2?9:6)>widths[i]?` textLength="${widths[i]}" lengthAdjust="spacingAndGlyphs"`:''}>${esc(line)}</tspan>`).join('');
+        changes.push(replaceInner(n,content));
+        let opening=attr(source.slice(n.start,n.openEnd),'y',String(y));
+        opening=showTag(opening,visible(i),node.visible);changes.push({start:n.start,end:n.openEnd,value:opening});
+      } else {
+        const opening=source.slice(n.start,n.openEnd), next=showTag(opening,visible(i),node.visible);
+        if(opening!==next)changes.push({start:n.start,end:n.openEnd,value:next});
+      }
+      const stone=parts.stones[i];if(stone) {
+        const opening=source.slice(stone.start,stone.openEnd), next=showTag(opening,visible(i),true);
+        if(opening!==next)changes.push({start:stone.start,end:stone.openEnd,value:next});
+      }
+    });
+    // Preserve complete vein paths in attributes so hidden branches can be restored.
+    const pathPattern=/<path\b[^>]*>/g;
+    const veinText=inner(source,parts.veins);
+    for(const m of veinText.matchAll(pathPattern)) {
+      const original=m[0].match(/data-editor-full-path="([^"]*)"/)?.[1] || m[0].match(/\bd="([^"]*)"/)?.[1];if(!original) continue;
+      const segments=original.match(/M[^M]*/g)||[], faint=/class="faint"/.test(m[0]);
+      const keep=segments.filter((_,i)=>faint?visible(mapFaint[i]):mapEdges[i]?.every(visible)).join('').trim();
+      const current=m[0].match(/\bd="([^"]*)"/)?.[1];
+      if(keep!==current) {
+        let next=attr(attr(m[0],'data-editor-full-path',original),'d',keep);
+        changes.push({start:parts.veins.openEnd+m.index,end:parts.veins.openEnd+m.index+m[0].length,value:next});
+      }
+    }
+    if(map.some((n,i)=>n.label!==before[i].label||n.visible!==before[i].visible)) {
+      const region=find(parts.nodes,'research-map'), label='Research map. '+map.filter((n,i)=>visible(i)).map(n=>clean(n.label)).join('; ')+'.';
+      changes.push({start:region.start,end:region.openEnd,value:attr(source.slice(region.start,region.openEnd),'aria-label',label)});
+    }
+    return edits(source,changes);
+  }
+  P.read=read;P.build=build;P.prepare=prepare;P.record=record;P.patchArticle=patchArticle;P.same=same;
+  P.readSite=readSite;P.validateSite=validateSite;P.readMap=readMap;P.mapParents=mapParents;
+})();
+
+    </script>
+    <script>
+(() => {
+  'use strict';
+  const P=PageEditor, $=id=>document.getElementById(id), key='yu-ohta-page-editor-v2';
+  const localToken=document.querySelector('meta[name="local-editor-token"]')?.content||'';
+  let source='',sourceHandle=null,info=null,operations=[],siteDraft=null,mapDraft=null;
+  let baseHash='',busy=false,pushPending=false,editingId='',optionField='',activeView='items';
+  let itemDirty=false,siteDirty=false,mapDirty=false,pendingOptions=false,previewTimer;
+  let options=P.mergeOptions(P.defaults),savedDraft=null;
+  const form=$('entryForm'),notice=$('notice'),clone=value=>JSON.parse(JSON.stringify(value));
+  const siteFields=['name','location','affiliation','profile','email','schoolCaption','schoolName','schoolURL','address','copyright','pageTitle','description'];
+  function message(text,error=false) {notice.hidden=false;notice.textContent=text;notice.classList.toggle('error',error);}
+  function storageRead() {try{return JSON.parse(localStorage.getItem(key)||localStorage.getItem('yu-ohta-page-editor-v1')||'null');}catch{return null;}}
   function persist() {
-    try { localStorage.setItem(key,JSON.stringify({source,entries,options,pendingOptions})); }
-    catch { message('このブラウザでは作業の一時保存ができません。終了前に更新版を書き出してください。',true); }
+    try{localStorage.setItem(key,JSON.stringify({source,operations,siteDraft,mapDraft,options,pendingOptions}));}
+    catch{message('一時保存ができません。終了前にHTMLを書き出してください。',true);}
+  }
+  function pending() {return operations.length+!!siteDraft+!!mapDraft+!!pendingOptions;}
+  function removedIds() {return new Set(operations.filter(o=>o.kind==='delete').map(o=>o.id));}
+  function effectiveEntries(includeDeleted=false) {
+    const deleted=removedIds();
+    const result=(info?.entries||[]).map(e=>operations.find(o=>o.kind==='update'&&o.id===e.id)?.entry||e)
+      .concat(operations.filter(o=>o.kind==='add').map(o=>o.entry));
+    return result.filter(e=>includeDeleted||!deleted.has(e.id)).map(e=>deleted.has(e.relatedId)?{...e,relatedId:'',relatedLabel:''}:e);
   }
   function optionKey(field) {
     const section=$('section').value;
     return {group:'groups',city:'cities',country:'countries',status:section+'Statuses',source:section==='media'?'mediaSources':'researchSources'}[field];
   }
   function fillSelect(id,values,placeholder='',previous) {
-    const select=$(id), old=previous ?? select.value;
-    select.replaceChildren();
+    const select=$(id),old=previous??select.value;select.replaceChildren();
     if(placeholder) select.add(new Option(placeholder,''));
-    for(const value of values) select.add(new Option(value,value));
-    if(values.includes(old)) select.value=old;
+    for(const value of values)select.add(new Option(value,value));
+    if(values.includes(old))select.value=old;
   }
   function updateRelated(previous) {
-    const selected=previous ?? $('related').value;
-    $('related').replaceChildren(new Option('なし',''));
-    for(const e of [...(info?.entries||[]),...entries]) {
-      if(e.id && e.id!==editingId) $('related').add(new Option(e.title,e.id));
-    }
-    if([...$('related').options].some(o=>o.value===selected)) $('related').value=selected;
+    const selected=previous??$('related').value;$('related').replaceChildren(new Option('なし',''));
+    for(const e of effectiveEntries()) if(e.id!==editingId)$('related').add(new Option(e.title,e.id));
+    if([...$('related').options].some(o=>o.value===selected))$('related').value=selected;
+    $('relatedLabelField').hidden=!$('related').value;
   }
   function updateFields(reset=false) {
     const section=$('section').value;
-    document.querySelectorAll('[data-for]').forEach(row=> {
+    form.querySelectorAll('[data-for]').forEach(row=>{
       row.hidden=!row.dataset.for.split(' ').includes(section);
       row.querySelectorAll('input,select,textarea,button').forEach(control=>control.disabled=row.hidden);
     });
-    for(const id of ['year','date','city','country','group','source','authors']) $(id).required=!$(id).disabled;
-    for(const field of ['status','group','source','city','country']) {
-      fillSelect(field,options[optionKey(field)],['city','country'].includes(field)?'選択してください':'',reset?'':undefined);
-    }
+    for(const id of ['year','date','city','country','group','source','authors'])$(id).required=!$(id).disabled;
+    for(const field of ['status','group','source','city','country']) fillSelect(field,options[optionKey(field)],['city','country'].includes(field)?'選択してください':'',reset?'':undefined);
     $('sourceLabel').innerHTML=(section==='media'?'サイト名':'掲載先')+'<span class="required">必須</span>';
     $('bylineLabel').textContent=section==='media'?'掲載内容・本人との関わり':'発表・参加内容';
-    $('byline').placeholder=section==='media'?'Interview with Yu Ohta':'Poster HP-46 · Presentation title';
-    updateRelated();preview();
+    updateRelated();schedulePreview();
   }
-  function addLink(value={label:'',url:''}) {
+  function addLink(container,value={label:'',url:''},social=false) {
     const row=document.createElement('div');row.className='links-row';
-    const label=document.createElement('input');label.placeholder='表示名（例：DOI）';label.setAttribute('aria-label','関連リンクの表示名');label.value=value.label;
-    const url=document.createElement('input');url.placeholder='https://…';url.setAttribute('aria-label','関連リンクのURL');url.value=value.url;
-    const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.setAttribute('aria-label','このリンクを削除');remove.onclick=()=>{row.remove();preview();};
-    row.append(label,url,remove);$('links').append(row);
+    const label=document.createElement('input');label.placeholder='表示名';label.setAttribute('aria-label',social?'SNS・外部リンクの表示名':'関連リンクの表示名');label.value=value.label;
+    const url=document.createElement('input');url.placeholder='https://…';url.setAttribute('aria-label',social?'SNS・外部リンクのURL':'関連リンクのURL');url.value=value.url;
+    const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.setAttribute('aria-label',social?'このSNS・外部リンクを削除':'このリンクを削除');
+    remove.onclick=()=>{row.remove();if(social)siteDirty=true;else itemDirty=true;schedulePreview();};
+    row.append(label,url,remove);$(container).append(row);
   }
+  function readLinks(container) {return [...$(container).children].map(row=>({label:row.children[0].value,url:row.children[1].value}));}
   function readForm() {
-    const data={};
-    for(const id of ['section','status','group','year','date','city','country','source','title','titleURL','authors','byline','description']) data[id]=$(id).value;
-    data.relatedId=$('related').value;
-    data.relatedLabel=$('related').selectedOptions[0]?.textContent || '';
-    data.links=[...$('links').children].map(row=>({label:row.children[0].value,url:row.children[1].value}));
-    return data;
+    const data={};for(const id of ['section','status','group','year','date','city','country','source','title','titleURL','authors','byline','description'])data[id]=$(id).value;
+    data.relatedId=$('related').value;data.relatedLabel=data.relatedId?$('relatedLabel').value:'';data.links=readLinks('links');return data;
   }
+  function hasItemInput() {return !!editingId||['title','titleURL','byline','description'].some(id=>!$(id).disabled&&P.clean($(id).value))||readLinks('links').some(l=>l.label||l.url);}
+  function canLeaveItem() {return !itemDirty||!hasItemInput()||confirm('まだ変更リストに反映していない入力があります。入力を取り消して切り替えますか？');}
+  function resetForm() {
+    const section=$('section').value;form.reset();$('section').value=section;$('year').value=new Date().getFullYear();
+    $('authors').value=info?.site.name||'Yu Ohta';$('links').replaceChildren();editingId='';itemDirty=false;
+    $('formTitle').textContent='新しい項目';$('queueButton').textContent='追加を変更リストに入れる';$('existingSelect').value='';
+    updateFields(true);updateEntryActions();
+  }
+  function updateEntryActions() {
+    const id=$('existingSelect').value,deleted=removedIds().has(id);
+    $('editExisting').disabled=busy||!id||deleted;$('deleteExisting').disabled=busy||!id;
+    $('deleteExisting').textContent=deleted?'削除を取り消す':'削除する';
+  }
+  function renderExisting() {
+    const selected=$('existingSelect').value,deleted=removedIds();$('existingSelect').replaceChildren(new Option('項目を選んでください',''));
+    for(const section of ['research','activity','media']) {
+      const group=document.createElement('optgroup');group.label=section.toUpperCase();
+      for(const e of effectiveEntries(true).filter(e=>e.section===section)) {
+        const op=operations.find(o=>(o.id||o.entry?.id)===e.id);
+        const prefix=deleted.has(e.id)?'[削除予定] ':op?'[変更あり] ':'';
+        group.append(new Option(prefix+e.title,e.id));
+      }
+      $('existingSelect').append(group);
+    }
+    if([...$('existingSelect').options].some(o=>o.value===selected))$('existingSelect').value=selected;
+    $('existingCount').textContent=effectiveEntries().length+'件';updateEntryActions();
+  }
+  function editEntry(id) {
+    if(!canLeaveItem())return;
+    const e=effectiveEntries().find(e=>e.id===id);if(!e)return;
+    editingId=e.id;$('section').value=e.section;
+    for(const [field,value] of [['status',e.status],['group',e.group],['source',e.source],['city',e.city],['country',e.country]]) {
+      const list=options[optionKey(field)];if(value&&!list.includes(value))list.push(value);
+    }
+    updateFields(true);
+    for(const field of ['status','group','year','date','city','country','source','title','titleURL','byline','description'])$(field).value=e[field]||'';
+    $('authors').value=e.authors.join('\n');updateRelated(e.relatedId);$('relatedLabel').value=e.relatedLabel||'';
+    $('links').replaceChildren();e.links.forEach(l=>addLink('links',l));
+    $('existingSelect').value=id;itemDirty=false;$('formTitle').textContent='項目を編集';$('queueButton').textContent='編集を変更リストに反映';
+    showView('items');updateEntryActions();preview();$('formTitle').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  function toggleDelete(id) {
+    if(!id)return;
+    if(editingId===id&&!canLeaveItem())return;
+    const existing=operations.find(o=>(o.id||o.entry?.id)===id);
+    if(existing?.kind==='delete') {
+      operations=operations.filter(o=>o!==existing);
+      if(existing.previous)operations.push({kind:'update',id,entry:existing.previous});
+    }
+    else {
+      operations=operations.filter(o=>(o.id||o.entry?.id)!==id);
+      if(existing?.kind!=='add')operations.push({kind:'delete',id,previous:existing?.kind==='update'?existing.entry:null});
+    }
+    if(editingId===id)resetForm();
+    persist();renderAll();message(existing?.kind==='delete'?'削除を取り消しました。':'削除を変更リストに入れました。公開前なら取り消せます。削除先へのリンクは文字として残します。');
+  }
+  function undoOperation(op) {
+    operations=operations.filter(o=>o!==op);
+    if(op.kind==='delete'&&op.previous)operations.push({kind:'update',id:op.id,entry:op.previous});
+    if(editingId===(op.id||op.entry?.id))resetForm();persist();renderAll();message('変更を取り消しました。');
+  }
+  function renderQueue() {
+    $('queueCount').textContent=(operations.length+!!siteDraft+!!mapDraft)+'件';$('queueList').replaceChildren();
+    const rows=operations.map(op=>({type:{add:'追加',update:'編集',delete:'削除'}[op.kind],title:op.entry?.title||info.entries.find(e=>e.id===op.id)?.title,
+      edit:op.kind==='delete'?null:()=>editEntry(op.id||op.entry.id),undo:()=>undoOperation(op)}));
+    if(siteDraft)rows.push({type:'編集',title:'プロフィール・連絡先・表示設定',edit:()=>showView('site'),undo:()=>{siteDraft=null;loadSite();persist();renderAll();message('プロフィール・連絡先の変更を取り消しました。');}});
+    if(mapDraft)rows.push({type:'編集',title:'研究マップ',edit:()=>showView('map'),undo:()=>{mapDraft=null;loadMap();persist();renderAll();message('研究マップの変更を取り消しました。');}});
+    if(!rows.length){const p=document.createElement('p');p.className='empty';p.textContent='未公開の変更はありません。';$('queueList').append(p);}
+    for(const row of rows) {
+      const el=document.createElement('div');el.className='queue-item';const label=document.createElement('p');label.className='muted';label.textContent=row.type;
+      const title=document.createElement('p');title.textContent=row.title;const actions=document.createElement('div');actions.className='actions';
+      if(row.edit){const b=document.createElement('button');b.textContent='編集';b.onclick=row.edit;actions.append(b);}
+      const undo=document.createElement('button');undo.textContent='取り消す';undo.onclick=row.undo;actions.append(undo);el.append(label,title,actions);$('queueList').append(el);
+    }
+    $('exportFile').disabled=busy||!source;$('saveOriginal').disabled=busy||!sourceHandle||!pending();
+    $('publishFile').disabled=busy||!source||pushPending;$('retryPush').disabled=busy;$('retryPush').hidden=!localToken||!pushPending;
+  }
+  function renderAll() {renderExisting();renderQueue();updateRelated();schedulePreview();}
+  function showView(name) {
+    activeView=name;document.querySelectorAll('[data-editor-view]').forEach(el=>el.hidden=el.dataset.editorView!==name);
+    document.querySelectorAll('[data-view-button]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.viewButton===name)));
+    $('previewMode').value=name==='items'?'item':'page';schedulePreview();
+  }
+  function loadSite() {
+    if(!info)return;const site=siteDraft||info.site;
+    siteFields.forEach(k=>$('site-'+k).value=site[k]);$('mapVisible').checked=site.mapVisible;
+    $('socialLinks').replaceChildren();site.social.forEach(l=>addLink('socialLinks',l,true));
+    $('sectionSettings').replaceChildren();
+    for(const s of site.sections) {
+      const row=document.createElement('div');row.className='section-setting';row.dataset.sectionId=s.id;
+      const label=document.createElement('label');label.textContent=s.id.toUpperCase();
+      const input=document.createElement('input');input.value=s.title;input.setAttribute('aria-label',s.id.toUpperCase()+'の章タイトル');
+      const visible=document.createElement('input');visible.type='checkbox';visible.checked=s.visible;visible.setAttribute('aria-label',s.id.toUpperCase()+'を表示');
+      const show=document.createElement('label');show.append(visible,document.createTextNode(' 表示'));row.append(label,input,show);$('sectionSettings').append(row);
+    }
+    $('siteFields').disabled=false;siteDirty=false;
+  }
+  function readSiteForm() {
+    const result={};siteFields.forEach(k=>result[k]=$('site-'+k).value);result.social=readLinks('socialLinks');result.mapVisible=$('mapVisible').checked;
+    result.sections=[...$('sectionSettings').children].map(row=>({id:row.dataset.sectionId,title:row.children[1].value,visible:row.querySelector('[type=checkbox]').checked}));return result;
+  }
+  function loadMap() {
+    if(!info)return;$('mapRows').replaceChildren();
+    for(const [i,n] of (mapDraft||info.map).entries()) {
+      const row=document.createElement('div');row.className='map-setting';row.dataset.nodeId=n.id;
+      const label=document.createElement('label');label.textContent=P.clean(info.map[i].label);label.htmlFor='map-label-'+i;
+      const input=document.createElement('textarea');input.id='map-label-'+i;input.rows=2;input.value=n.label;input.setAttribute('aria-label','マップ: '+P.clean(info.map[i].label));
+      const visible=document.createElement('input');visible.type='checkbox';visible.checked=n.visible;visible.setAttribute('aria-label',P.clean(info.map[i].label)+'を表示');
+      const show=document.createElement('label');show.append(visible,document.createTextNode(' 表示'));
+      row.append(label,input,show);$('mapRows').append(row);
+    }
+    $('mapFields').disabled=false;mapDirty=false;
+  }
+  function readMapForm() {return [...$('mapRows').children].map((row,i)=>({id:row.dataset.nodeId,parent:P.mapParents[i],label:row.querySelector('textarea').value,visible:row.querySelector('[type=checkbox]').checked}));}
+  function schedulePreview() {clearTimeout(previewTimer);previewTimer=setTimeout(preview,180);}
   function preview() {
-    if(!info) return;
+    if(!info)return;
     try {
-      const e=P.validate(readForm());e.id=editingId || 'preview-entry';
-      // Imported scripts never execute in this sandboxed item preview.
-      const css=info.styles.replace(/<\/style/gi,'');
-      $('preview').srcdoc='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>'+css+
-        '\nbody{margin:0;background:#f3f2ee}.research-item{--item-inset:22px;padding-block:25px;margin:0;border:0}.research-item h3{font-size:21px;overflow-wrap:anywhere}.item-side .status{white-space:normal;max-width:130px}.item-main{min-width:0}.research-item:before{display:none}</style></head><body>'+P.render(e)+'</body></html>';
-      $('previewHint').textContent='入力中の項目です。「追加リストに入れる」で保存対象になります。';
+      if($('previewMode').value==='page') {
+        const site=activeView==='site'&&siteDirty?P.validateSite(readSiteForm()):siteDraft;
+        const map=activeView==='map'&&mapDirty?readMapForm():mapDraft;
+        const result=P.build(source,operations,options,site,map).replace(/\x3cscript\b[^>]*>[\s\S]*?<\/script>/gi,'').replace('</head>','<style>a{pointer-events:none}.back-to-top{display:none}</style></head>');
+        $('preview').srcdoc=result;$('preview').classList.add('page-preview');$('previewHint').textContent='変更後のページ全体です。プレビュー内をスクロールできます。';
+      } else {
+        const e=P.validate(readForm());e.id=editingId||'preview-entry';
+        const before=info.entries.find(x=>x.id===editingId),item=before?P.patchArticle(before,e):P.render(e);
+        const css=info.styles.replace(/<\/style/gi,'');
+        $('preview').srcdoc='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>'+css+
+          '\nbody{margin:0;background:#f3f2ee}.research-item{--item-inset:22px;padding-block:25px;margin:0;border:0}.research-item h3{font-size:21px;overflow-wrap:anywhere}.item-side .status{white-space:normal;max-width:130px}.item-main{min-width:0}.research-item:before{display:none}</style></head><body>'+item+'</body></html>';
+        $('preview').classList.remove('page-preview');$('previewHint').textContent='入力中の項目です。「変更リストに反映」してから公開します。';
+      }
     } catch(error) {
-      $('preview').srcdoc='<html lang="ja"><body style="font:14px/1.8 -apple-system,sans-serif;color:#777;padding:30px;background:#f3f2ee">タイトル・日付などの必須項目を入力すると、ここに表示されます。</body></html>';
+      $('preview').srcdoc='<html lang="ja"><body style="font:14px/1.8 -apple-system,sans-serif;color:#777;padding:30px;background:#f3f2ee">項目を選ぶか、タイトル・日付などを入力すると表示されます。</body></html>';
       $('previewHint').textContent=error.message;
     }
   }
-  function renderQueue() {
-    $('queueCount').textContent=entries.length+'件';$('queueList').replaceChildren();
-    if(!entries.length) {const p=document.createElement('p');p.className='empty';p.textContent='追加予定の項目はまだありません。';$('queueList').append(p);}
-    for(const e of entries) {
-      const row=document.createElement('div');row.className='queue-item';
-      const meta=document.createElement('p');meta.className='muted';meta.textContent=e.section.toUpperCase()+' / '+e.dateline;
-      const title=document.createElement('p');title.textContent=e.title;
-      const actions=document.createElement('div');actions.className='actions';
-      const edit=document.createElement('button');edit.textContent='編集';edit.onclick=()=>editEntry(e);
-      const remove=document.createElement('button');remove.textContent='削除';remove.onclick=()=> {
-        const dependency=entries.find(x=>x.id!==e.id && (x.relatedId===e.id || [x.titleURL,...x.links.map(l=>l.url)].includes('#'+e.id)));
-        if(dependency) return message(`「${dependency.title}」からリンクされています。先にその関連リンクを外してください。`,true);
-        entries=entries.filter(x=>x.id!==e.id);if(editingId===e.id) resetForm();
-        persist();renderQueue();updateRelated();
-      };
-      actions.append(edit,remove);row.append(meta,title,actions);$('queueList').append(row);
-    }
-    $('exportFile').disabled=busy || !source;
-    $('saveOriginal').disabled=busy || !sourceHandle || (!entries.length&&!pendingOptions);
-    $('publishFile').disabled=busy || !source || pushPending;
-    $('retryPush').disabled=busy;
-    $('retryPush').hidden=!localToken || !pushPending;
-  }
-  function resetForm() {
-    const section=$('section').value;form.reset();$('section').value=section;
-    $('year').value=new Date().getFullYear();$('authors').value='Yu Ohta';$('links').replaceChildren();editingId='';
-    $('formTitle').textContent='新しい項目';$('queueButton').textContent='追加リストに入れる';
-    updateFields(true);
-  }
-  function editEntry(e) {
-    editingId=e.id;$('section').value=e.section;updateFields(true);
-    for(const id of ['status','group','year','date','city','country','source','title','titleURL','byline','description']) $(id).value=e[id] || '';
-    $('authors').value=e.authors.join('\n');updateRelated(e.relatedId);$('links').replaceChildren();e.links.forEach(addLink);
-    $('formTitle').textContent='追加リストの項目を編集';$('queueButton').textContent='変更を反映する';preview();$('formTitle').scrollIntoView({behavior:'smooth',block:'start'});
-  }
-  function showExisting() {
-    $('existingCount').textContent=info.entries.length+'件';$('existing').replaceChildren();
-    for(const e of info.entries) {const li=document.createElement('li');li.textContent=e.section.toUpperCase()+' · '+e.title;$('existing').append(li);}
+  function observeOptions() {
+    const observed={groups:info.groups,researchSources:[],mediaSources:[],researchStatuses:[],activityStatuses:[],mediaStatuses:[],cities:[],countries:[]};
+    info.entries.forEach(e=>{if(e.source&&e.section!=='activity')observed[e.section+'Sources'].push(e.source);if(e.status)observed[e.section+'Statuses'].push(e.status);if(e.city)observed.cities.push(e.city);if(e.country)observed.countries.push(e.country);});
+    options=P.mergeOptions(P.defaults,options,info.settings,observed);
   }
   async function importFile(file,handle=null,preserveDraft=false) {
-    const next=await file.text(), nextInfo=P.read(next);
-    if(entries.length && source!==next && !confirm('別のHTMLを開くと、現在の追加リストは消えます。続けますか？')) return;
-    if(source!==next) entries=[];
-    source=next;sourceHandle=handle;info=nextInfo;
-    const observed={groups:info.groups,researchSources:[],mediaSources:[],researchStatuses:[],activityStatuses:[],mediaStatuses:[]};
-    info.entries.forEach(e=> {if(e.source && e.section!=='activity') observed[e.section+'Sources'].push(e.source);if(e.status) observed[e.section+'Statuses'].push(e.status);});
-    options=P.mergeOptions(P.defaults,options,info.settings,observed);
+    const next=await file.text(),nextInfo=P.read(next);
+    if(pending()&&source!==next&&!confirm('別のHTMLを開くと現在の変更リストは消えます。続けますか？'))return;
+    if(source!==next){operations=[];siteDraft=null;mapDraft=null;}
+    source=next;sourceHandle=handle;info=nextInfo;observeOptions();pendingOptions=false;
     $('entryFields').disabled=false;$('fileName').textContent=file.name+' · '+info.entries.length+'件を読み込みました';
-    pendingOptions=false;resetForm();showExisting();renderQueue();if(!preserveDraft) persist();
-    message('ファイルを読み込みました。入力した項目だけを追加し、既存のHTMLの整形は保ちます。');
+    resetForm();loadSite();loadMap();renderAll();if(!preserveDraft)persist();message('ファイルを読み込みました。既存項目を選んで編集・削除できます。');
   }
-  $('openFile').onclick=async()=> {
-    if(typeof window.showOpenFilePicker!=='function') return $('fileInput').click();
-    try {
-      const [handle]=await window.showOpenFilePicker({types:[{description:'HTML',accept:{'text/html':['.html']}}],multiple:false});
-      await importFile(await handle.getFile(),handle);
-    } catch(error) {if(error.name==='AbortError') return;if(error.name==='SecurityError') $('fileInput').click();else message(error.message,true);}
+  $('openFile').onclick=async()=>{
+    if(typeof window.showOpenFilePicker!=='function')return $('fileInput').click();
+    try{const [h]=await window.showOpenFilePicker({types:[{description:'HTML',accept:{'text/html':['.html']}}],multiple:false});await importFile(await h.getFile(),h);}
+    catch(e){if(e.name==='AbortError')return;if(e.name==='SecurityError')$('fileInput').click();else message(e.message,true);}
   };
-  $('fileInput').onchange=async event=> {try {if(event.target.files[0]) await importFile(event.target.files[0]);}catch(error){message(error.message,true);}finally{event.target.value='';}};
-  $('section').onchange=()=>updateFields(true);
-  form.addEventListener('input',preview);form.addEventListener('change',preview);
-  $('addLink').onclick=()=>addLink();$('resetForm').onclick=resetForm;
-  form.onsubmit=event=> {
-    event.preventDefault();if(!form.reportValidity()) return;
-    try {
-      const entry=P.validate(readForm());entry.id=editingId || P.uniqueId(source,entries,entry.title);
-      const next=editingId?entries.map(e=>e.id===editingId?entry:e):[...entries,entry];
-      P.build(source,next,options);entries=next;
-      persist();resetForm();renderQueue();message(localToken?'追加リストに反映しました。「保存して公開」でサイトに反映できます。':'追加リストに反映しました。「更新版を書き出す」でHTMLに保存できます。');
-    } catch(error) {message(error.message,true);}
+  $('fileInput').onchange=async event=>{try{if(event.target.files[0])await importFile(event.target.files[0]);}catch(e){message(e.message,true);}finally{event.target.value='';}};
+  $('existingSelect').onchange=updateEntryActions;$('editExisting').onclick=()=>editEntry($('existingSelect').value);
+  $('deleteExisting').onclick=()=>toggleDelete($('existingSelect').value);
+  $('newEntry').onclick=()=>{if(canLeaveItem())resetForm();};
+  $('section').onchange=()=>{updateFields(true);itemDirty=true;};
+  $('related').onchange=()=>{const target=effectiveEntries().find(e=>e.id===$('related').value);$('relatedLabel').value=target?.title||'';updateRelated();itemDirty=true;schedulePreview();};
+  form.addEventListener('input',()=>{itemDirty=true;schedulePreview();});form.addEventListener('change',()=>{itemDirty=true;schedulePreview();});
+  $('addLink').onclick=()=>{addLink('links');itemDirty=true;};$('resetForm').onclick=()=>{if(canLeaveItem())resetForm();};
+  form.onsubmit=event=>{
+    event.preventDefault();if(!form.reportValidity())return;
+    try{
+      const entry=P.validate(readForm());entry.id=editingId||P.uniqueId(source,effectiveEntries(true),entry.title);
+      const original=info.entries.find(e=>e.id===entry.id),kind=original?'update':'add';
+      let next=operations.filter(o=>(o.id||o.entry?.id)!==entry.id);
+      if(!original||!P.same(P.record(original),P.record(entry)))next.push({kind,id:entry.id,entry});
+      P.build(source,next,options,siteDraft,mapDraft);operations=next;persist();resetForm();renderAll();message('変更リストに反映しました。「保存して公開」で保存・commit・pushを行います。');
+    }catch(e){message(e.message,true);}
   };
-  document.querySelectorAll('[data-add]').forEach(button=>button.onclick=()=> {
-    optionField=button.dataset.add;$('optionValue').value='';
-    $('optionTitle').textContent=({status:'種別',group:'研究分野',source:$('section').value==='media'?'サイト名':'掲載先',city:'都市',country:'国'}[optionField])+'を追加';
+  document.querySelectorAll('[data-view-button]').forEach(button=>button.onclick=()=>showView(button.dataset.viewButton));
+  $('previewMode').onchange=preview;
+  document.querySelectorAll('[data-add]').forEach(button=>button.onclick=()=>{
+    optionField=button.dataset.add;$('optionValue').value='';$('optionTitle').textContent=({status:'種別',group:'研究分野',source:$('section').value==='media'?'サイト名':'掲載先',city:'都市',country:'国'}[optionField])+'を追加';
     $('optionDialog').showModal();$('optionValue').focus();
   });
   $('cancelOption').onclick=()=>$('optionDialog').close();
-  $('optionForm').onsubmit=event=> {
-    event.preventDefault();const value=P.normalizeOption($('optionValue').value);
-    if(!value) return;
-    const fieldKey=optionKey(optionField), values=options[fieldKey];
-    const existing=values.find(x=>x.toLowerCase()===value.toLowerCase());
-    if(!existing) values.push(value);
+  $('optionForm').onsubmit=event=>{
+    event.preventDefault();const value=P.normalizeOption($('optionValue').value);if(!value)return;
+    const values=options[optionKey(optionField)],existing=values.find(x=>x.toLowerCase()===value.toLowerCase());if(!existing)values.push(value);
     fillSelect(optionField,values,['city','country'].includes(optionField)?'選択してください':'',existing||value);
-    pendingOptions=true;$('optionDialog').close();persist();preview();renderQueue();
+    pendingOptions=true;itemDirty=true;$('optionDialog').close();persist();schedulePreview();renderQueue();
   };
-  function download(text,name) {
-    const url=URL.createObjectURL(new Blob([text],{type:'text/html;charset=utf-8'}));
-    const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
-  }
+  $('addSocial').onclick=()=>{addLink('socialLinks',undefined,true);siteDirty=true;};
+  $('siteForm').addEventListener('input',()=>{siteDirty=true;schedulePreview();});$('siteForm').addEventListener('change',()=>{siteDirty=true;schedulePreview();});
+  $('siteForm').onsubmit=event=>{
+    event.preventDefault();try{const next=P.validateSite(readSiteForm());P.build(source,operations,options,next,mapDraft);siteDraft=P.same(next,info.site)?null:next;siteDirty=false;persist();renderQueue();message('プロフィール・連絡先の変更を反映しました。');}catch(e){message(e.message,true);}
+  };
+  $('resetSite').onclick=()=>{loadSite();schedulePreview();};
+  $('mapForm').addEventListener('input',()=>{mapDirty=true;schedulePreview();});$('mapForm').addEventListener('change',()=>{mapDirty=true;schedulePreview();});
+  $('mapForm').onsubmit=event=>{
+    event.preventDefault();try{const next=readMapForm();P.build(source,operations,options,siteDraft,next);mapDraft=P.same(next,info.map)?null:next;mapDirty=false;persist();renderQueue();message('研究マップの変更を反映しました。');}catch(e){message(e.message,true);}
+  };
+  $('resetMap').onclick=()=>{loadMap();schedulePreview();};
   function exported() {
-    if(['title','titleURL','byline','description'].some(id=>!$(id).disabled && P.clean($(id).value)) || [...$('links').querySelectorAll('input')].some(input=>P.clean(input.value))) {
-      throw new Error('入力中の項目を先に追加リストに入れてください。追加しない場合は「入力をリセット」で消去できます。');
-    }
-    return P.build(source,entries,options);
+    if(itemDirty&&hasItemInput()||siteDirty||mapDirty)throw new Error('入力中の変更を先に「変更リストに反映」してください。');
+    return P.build(source,operations,options,siteDraft,mapDraft);
   }
   function acceptedSave(result,handle) {
-    source=result;sourceHandle=handle;entries=[];pendingOptions=false;info=P.read(source);
-    savedDraft=null;$('restoreDraft').hidden=true;
-    resetForm();renderQueue();showExisting();persist();message('保存しました。さらに項目を追加できます。');
+    source=result;sourceHandle=handle;operations=[];siteDraft=null;mapDraft=null;pendingOptions=false;info=P.read(source);
+    savedDraft=null;$('restoreDraft').hidden=true;resetForm();loadSite();loadMap();renderAll();persist();message('保存しました。');
   }
-  $('exportFile').onclick=async()=> {
-    try {
-      const result=exported();
-      if(typeof window.showSaveFilePicker==='function') {
-        const handle=await window.showSaveFilePicker({suggestedName:'index.html',types:[{description:'HTML',accept:{'text/html':['.html']}}]});
-        if(sourceHandle && await handle.isSameEntry(sourceHandle) && await (await sourceHandle.getFile()).text()!==source) throw new Error('読み込み後に元ファイルが変更されています。最新版を開き直してください。');
-        const stream=await handle.createWritable();await stream.write(result);await stream.close();acceptedSave(result,handle);
-      } else {
-        download(result,'index.html');
-        message('更新版HTMLをダウンロードしました。保存先のファイルを確認してから、元の index.html と置き換えてください。追加リストは確認用に残しています。');
-      }
-    } catch(error) {if(error.name!=='AbortError') message(error.message,true);}
+  function download(content,name) {
+    const url=URL.createObjectURL(new Blob([content],{type:'text/html;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }
+  $('exportFile').onclick=async()=>{
+    try{const result=exported();if(typeof window.showSaveFilePicker==='function'){
+      const h=await window.showSaveFilePicker({suggestedName:'index.html',types:[{description:'HTML',accept:{'text/html':['.html']}}]});
+      if(sourceHandle&&await h.isSameEntry(sourceHandle)&&await(await sourceHandle.getFile()).text()!==source)throw new Error('元ファイルが変更されています。最新版を開き直してください。');
+      const stream=await h.createWritable();await stream.write(result);await stream.close();acceptedSave(result,h);
+    }else{download(result,'index.html');message('更新版HTMLをダウンロードしました。確認用に変更リストを残しています。');}}
+    catch(e){if(e.name!=='AbortError')message(e.message,true);}
   };
-  $('saveOriginal').onclick=async()=> {
-    try {
-      if(!sourceHandle) return;
-      const result=exported(), current=await (await sourceHandle.getFile()).text();
-      if(current!==source) throw new Error('読み込み後に元ファイルが変更されています。上書きせず、最新版を開き直してください。');
-      const stream=await sourceHandle.createWritable();await stream.write(result);await stream.close();acceptedSave(result,sourceHandle);
-    } catch(error) {if(error.name!=='AbortError') message(error.message,true);}
+  $('saveOriginal').onclick=async()=>{
+    try{if(!sourceHandle)return;const result=exported();if(await(await sourceHandle.getFile()).text()!==source)throw new Error('元ファイルが変更されています。最新版を開き直してください。');const stream=await sourceHandle.createWritable();await stream.write(result);await stream.close();acceptedSave(result,sourceHandle);}
+    catch(e){if(e.name!=='AbortError')message(e.message,true);}
   };
   function setBusy(value) {
-    busy=value;
-    $('entryFields').disabled=value || !source;
-    $('queueList').inert=value;
-    $('restoreDraft').disabled=value;
-    $('publishFile').textContent=value?'保存・送信中…':'保存して公開';
-    renderQueue();
+    busy=value;for(const id of ['entryFields','siteFields','mapFields'])$(id).disabled=value||!source;
+    $('queueList').inert=value;$('existingTools').inert=value;document.querySelector('.view-tabs').inert=value;$('restoreDraft').disabled=value;
+    $('publishFile').textContent=value?'保存・送信中…':'保存して公開';renderQueue();
   }
   async function localRequest(path,payload) {
-    const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Editor-Token':localToken},body:JSON.stringify(payload)});
-    const result=await response.json();
-    if(!response.ok) throw new Error(result.error || '保存・公開できませんでした。');
-    return result;
+    const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Editor-Token':localToken},body:JSON.stringify(payload)}),result=await response.json();
+    if(!response.ok)throw new Error(result.error||'保存・公開できませんでした。');return result;
   }
   function published(result) {
     pushPending=!result.pushed;
-    if(result.pushed) {
-      message('保存・commit・pushが完了しました。サイトへの反映には少し時間がかかります。');
-      const a=document.createElement('a');a.href='https://wyeueyw.github.io/';a.target='_blank';a.rel='noopener noreferrer';a.textContent='公開サイトを開く ↗';
-      notice.append(document.createElement('br'),a);
-    } else {
-      message('HTMLは保存しました。公開処理でエラーが発生しました。\n'+result.error,true);
-      // A commit failure needs another save; a completed commit needs a push retry.
-      pushPending=!!result.committed;
-    }
+    if(result.pushed){message('保存・commit・pushが完了しました。サイトへの反映には少し時間がかかります。');const a=document.createElement('a');a.href='https://wyeueyw.github.io/';a.target='_blank';a.rel='noopener noreferrer';a.textContent='公開サイトを開く ↗';notice.append(document.createElement('br'),a);}
+    else{message('HTMLは保存しました。公開処理でエラーが発生しました。\n'+result.error,true);pushPending=!!result.committed;}
   }
-  $('publishFile').onclick=async()=> {
-    if(busy) return;
-    try {
-      const next=exported();setBusy(true);message('index.html を保存し、GitHubへ送信しています…');
-      const result=await localRequest('/api/publish',{html:next,baseHash});
-      if(result.saved) {baseHash=result.baseHash;acceptedSave(next,null);}
-      published(result);
-    } catch(error) {message(error.message+'\n追加リストは保持しています。',true);}
-    finally {setBusy(false);}
+  $('publishFile').onclick=async()=>{
+    if(busy)return;try{const next=exported();setBusy(true);message('index.html を保存し、GitHubへ送信しています…');const result=await localRequest('/api/publish',{html:next,baseHash});if(result.saved){baseHash=result.baseHash;acceptedSave(next,null);}published(result);}
+    catch(e){message(e.message+'\n変更リストは保持しています。',true);}finally{setBusy(false);}
   };
-  $('retryPush').onclick=async()=> {
-    if(busy) return;
-    try {setBusy(true);message('保存済みの変更をGitHubへ再送信しています…');published(await localRequest('/api/push',{}));}
-    catch(error) {message(error.message,true);}
-    finally {setBusy(false);}
+  $('retryPush').onclick=async()=>{if(busy)return;try{setBusy(true);message('保存済みの変更をGitHubへ再送信しています…');published(await localRequest('/api/push',{}));}catch(e){message(e.message,true);}finally{setBusy(false);}};
+  savedDraft=storageRead();if(savedDraft?.options)options=P.mergeOptions(P.defaults,savedDraft.options);
+  if(savedDraft?.source&&(savedDraft.operations?.length||savedDraft.entries?.length||savedDraft.siteDraft||savedDraft.mapDraft||savedDraft.pendingOptions))$('restoreDraft').hidden=false;
+  $('restoreDraft').onclick=()=>{
+    try{
+      if(localToken&&(!source||savedDraft.source!==source))throw new Error('前回の作業と現在のファイルが異なります。最新版を確認してから編集してください。');
+      if(pending()&&!confirm('現在の変更リストを前回の作業に置き換えますか？'))return;
+      source=savedDraft.source;info=P.read(source);operations=savedDraft.operations||(savedDraft.entries||[]).map(e=>({kind:'add',id:e.id,entry:e}));siteDraft=savedDraft.siteDraft||null;mapDraft=savedDraft.mapDraft||null;
+      options=P.mergeOptions(P.defaults,savedDraft.options);sourceHandle=null;pendingOptions=!!savedDraft.pendingOptions;
+      P.build(source,operations,options,siteDraft,mapDraft);$('entryFields').disabled=false;$('restoreDraft').hidden=true;
+      resetForm();loadSite();loadMap();renderAll();message('前回の変更リストを復元しました。');
+    }catch(e){message(e.message,true);}
   };
-  savedDraft=storageRead();
-  if(savedDraft?.options) options=P.mergeOptions(P.defaults,savedDraft.options);
-  if(savedDraft?.source && (savedDraft.entries?.length || savedDraft.pendingOptions)) $('restoreDraft').hidden=false;
-  $('restoreDraft').onclick=()=> {
-    try {
-      if(localToken && (!source || savedDraft.source!==source)) throw new Error('前回の作業と現在の index.html が異なります。現在のファイルに合わせて入力し直してください。');
-      if(source && !confirm('前回の作業に切り替えますか？')) return;
-      info=P.read(savedDraft.source);source=savedDraft.source;entries=Array.isArray(savedDraft.entries)?savedDraft.entries:[];
-      options=P.mergeOptions(P.defaults,savedDraft.options);sourceHandle=null;pendingOptions=true;
-      $('entryFields').disabled=false;$('restoreDraft').hidden=true;$('fileName').textContent=localToken?'index.html · 前回の作業を復元':'前回の作業 · 保存時は「更新版を書き出す」を使用';
-      resetForm();renderQueue();showExisting();message('前回の追加リストを復元しました。');
-    } catch(error){message(error.message,true);}
-  };
-  window.addEventListener('beforeunload',event=>{if(busy||entries.length||pendingOptions){event.preventDefault();event.returnValue='';}});
-  // Hosted copies can read their adjacent public page; local files use the picker.
-  if(localToken) {
-    $('openFile').hidden=true;$('saveOriginal').hidden=true;$('publishFile').hidden=false;
-    $('exportFile').classList.remove('primary');$('exportFile').textContent='HTMLを書き出す';
-    $('workflow').textContent='入力する → 追加リストに入れる → 保存して公開';
-    fetch('/api/page',{cache:'no-store'})
-      .then(response=>{if(!response.ok) throw new Error('ファイルを読み込めませんでした。');return response.json();})
-      .then(async result=>{
-        await importFile(new File([result.html],'index.html',{type:'text/html'}),null,true);baseHash=result.baseHash;
-        pushPending=!!result.pendingPush;renderQueue();
-        message(pushPending?'前回の変更がまだ送信されていません。「pushを再試行」で送信できます。':'MY PAGE の index.html を読み込みました。「保存して公開」で保存からpushまで行います。');
-      }).catch(error=>message(error.message,true));
-  } else if (/^https?:$/.test(window.location.protocol)) {
-    fetch(new URL('./index.html', window.location.href), { cache: 'no-store' })
-      .then(response => { if (!response.ok) throw new Error('HTTP ' + response.status); return response.text(); })
-      .then(text => { if (!source) return importFile(new File([text], 'index.html', {type: 'text/html'}),null,true); })
-      .catch(() => message('index.html を開くボタンから、編集するファイルを選んでください。'));
+  window.addEventListener('beforeunload',event=>{if(busy||pending()||itemDirty&&hasItemInput()||siteDirty||mapDirty){event.preventDefault();event.returnValue='';}});
+  if(localToken){
+    $('openFile').hidden=true;$('saveOriginal').hidden=true;$('publishFile').hidden=false;$('exportFile').classList.remove('primary');$('exportFile').textContent='HTMLを書き出す';
+    $('workflow').textContent='編集・削除 → 変更リストに反映 → 保存して公開';
+    fetch('/api/page',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('ファイルを読み込めませんでした。');return r.json();}).then(async result=>{
+      await importFile(new File([result.html],'index.html',{type:'text/html'}),null,true);baseHash=result.baseHash;pushPending=!!result.pendingPush;renderQueue();message(pushPending?'前回の変更が未送信です。「pushを再試行」で送信できます。':'既存項目・プロフィール・研究マップを編集できます。「保存して公開」でpushまで行います。');
+    }).catch(e=>message(e.message,true));
+  }else if(/^https?:$/.test(location.protocol)){
+    fetch(new URL('./index.html',location.href),{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error();return r.text();}).then(html=>{if(!source)return importFile(new File([html],'index.html',{type:'text/html'}),null,true);}).catch(()=>message('index.html を開くボタンからファイルを選んでください。'));
   }
-  updateFields(true);$('year').value=new Date().getFullYear();$('authors').value='Yu Ohta';
+  updateFields(true);$('year').value=new Date().getFullYear();$('authors').value='Yu Ohta';showView('items');
 })();
 
     </script>
