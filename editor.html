@@ -64,7 +64,6 @@
       .actions { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; margin-top: 22px; }
       .preview { border: 1px solid var(--line); background: #eeeee8; border-radius: 7px; overflow: hidden; min-height: 300px; }
       iframe { display: block; width: 100%; height: 350px; border: 0; background: #f3f2ee; }
-      .preview-head { padding: 10px 16px; font-size: 10px; color: var(--soft); letter-spacing: .1em; border-bottom: 1px solid var(--line); }
       #previewHint { padding: 16px 20px; margin: 0; }
       #notice { width: calc(100% - 60px); max-width: 1260px; margin: 14px auto 0; padding: 12px 16px; border-left: 3px solid #68755e; background: #e8ede2; white-space: pre-line; }
       #notice.error { border-color: #9f513c; background: #f5e9e3; }
@@ -189,7 +188,7 @@
       </section>
       <section class="panel">
         <div class="preview-controls"><h2>表示プレビュー</h2><select id="previewMode" aria-label="プレビューの種類"><option value="item">入力中の項目</option><option value="page">ページ全体</option></select></div>
-        <div class="preview"><div class="preview-head">ITEM PREVIEW</div><iframe id="preview" title="追加する項目のプレビュー" sandbox></iframe><p id="previewHint" class="hint">ファイルを開き、タイトルなどを入力すると表示されます。</p></div>
+        <div class="preview"><iframe id="preview" title="項目のプレビュー" sandbox></iframe><p id="previewHint" class="hint">ファイルを開き、タイトルなどを入力すると表示されます。</p></div>
         <div class="queue"><h2>変更リスト <span id="queueCount" class="muted">0件</span></h2><div id="queueList"><p class="empty">未公開の変更はありません。</p></div></div>
       </section>
     </main>
@@ -291,12 +290,16 @@
     if (/^poster and oral$/i.test(text)) text='Poster and oral presentation';
     return Object.values(defaults).flat().find(v=>v.toLowerCase()===text.toLowerCase()) || text;
   }
-  function safeURL(value, required=false) {
+  function safeURL(value, required=false, allowFragment=true) {
     const text=clean(value);
     if (!text && !required) return '';
-    if (/^#[A-Za-z][\w:.-]*$/.test(text)) return text;
+    if (allowFragment && /^#[A-Za-z][\w:.-]*$/.test(text)) return text;
+    const invalidURL = allowFragment
+      ? 'リンクは https:// または http:// で始まるURL、もしくは #項目名 を入力してください。'
+      : 'リンクは https:// または http:// で始まるURLを入力してください。';
+    if (!/^https?:\/\/[^/\\\s]/i.test(text)) throw new Error(invalidURL);
     let url;
-    try { url=new URL(text); } catch { throw new Error('リンクは https:// で始まるURL、または #項目名 を入力してください。'); }
+    try { url=new URL(text); } catch { throw new Error(invalidURL); }
     if (!['https:','http:'].includes(url.protocol) || !url.hostname) throw new Error('この種類のURLは使用できません。');
     return text;
   }
@@ -327,14 +330,16 @@
     if (entry.section==='research') entry.byline=`${entry.authors.length===1?'Author':'Authors'}: ${entry.authors.join(' · ')}`;
     entry.titleURL=safeURL(entry.titleURL);
     entry.links=(entry.links || []).filter(x=>clean(x.label)||clean(x.url)).map(x=> {
-      if (!clean(x.label)) throw new Error('関連リンクの表示名を入力してください。');
-      return {label:clean(x.label).replace(/\s*↗$/,''),url:safeURL(x.url,true)};
+      const label=clean(x.label).replace(/\s*↗$/,'');
+      if (!label) throw new Error('関連リンクの表示名を入力してください。');
+      return {label,url:safeURL(x.url,true)};
     });
     entry.status=normalizeOption(entry.status);
     entry.source=normalizeOption(entry.source);
     if(entry.section==='activity') {entry.year='';entry.source='';entry.group='';entry.authors=[];}
     else {entry.date='';entry.city='';entry.country='';if(entry.section==='media'){entry.group='';entry.authors=[];}}
     if (entry.relatedId && !/^[A-Za-z][\w:.-]*$/.test(entry.relatedId)) throw new Error('関連項目のIDが不正です。');
+    if (entry.relatedId && !entry.relatedLabel) throw new Error('ページ内リンクの表示名を入力してください。');
     return entry;
   }
   function uniqueId(source, entries, title) {
@@ -359,7 +364,9 @@
       let text=escape(e.byline);
       if(e.relatedId) {
         const label=escape(e.relatedLabel), link=`<a href="#${escape(e.relatedId)}" style="text-decoration: underline; text-underline-offset: 3px;">${label}</a>`;
-        text=label && text.includes(label)?text.replace(label,()=>link):text+`${text?' · ':''}Related work: ${link}`;
+        text=e.section!=='research' && label && text.includes(label)
+          ? text.replace(label,()=>link)
+          : text+`${text?' · ':''}Related work: ${link}`;
       }
       lines.push('              <div class="byline">',`                ${text}`,'              </div>');
     }
@@ -421,7 +428,7 @@
     else result=result.replace(/  <\/body>/,config+'\n  </body>');
     return result;
   }
-  globalThis.PageEditor={defaults,clean,escape,plain,elements,read,mergeOptions,normalizeOption,validate,uniqueId,render,insert,build};
+  globalThis.PageEditor={defaults,clean,escape,decode,plain,elements,read,mergeOptions,normalizeOption,safeURL,validate,uniqueId,render,insert,build};
 })();
 
     </script>
@@ -469,6 +476,15 @@
   function linkList(source,parent,nodes) {
     return nodes.filter(n=>n.tag==='a'&&inside(n,parent)).map(n=>({label:text(source,n).replace(/\s*↗$/,''),url:n.attrs.href||''}));
   }
+  function readByline(source,byline,related,section) {
+    const raw=text(source,byline);
+    if (section==='research') return raw.replace(/(?:^|\s+·\s+)Related work:.*$/,'');
+    if (!related || P.plain(source.slice(related.end,byline.closeStart))) return raw;
+    const beforeLink=P.plain(source.slice(byline.openEnd,related.start));
+    return /(?:^|\s+·\s+)Related work:$/.test(beforeLink)
+      ? beforeLink.replace(/(?:^|\s+·\s+)Related work:$/,'')
+      : raw;
+  }
   function read(source) {
     const result=oldRead(source), nodes=P.elements(source), used=[];
     result.entries=[];
@@ -480,14 +496,15 @@
         const titleLink=nodes.find(n=>n.tag==='a'&&inside(n,titleNode));
         const byline=find(nodes,'byline',a), description=find(nodes,'item-description',a), date=text(source,find(nodes,'item-dateline',a));
         const related=nodes.find(n=>n.tag==='a'&&inside(n,byline)&&n.attrs.href?.startsWith('#'));
+        const bylineText=readByline(source,byline,related,section);
         const title=text(source,titleNode).replace(/\s*↗$/,''), id=a.attrs.id || P.uniqueId(source,used,title);
         const dateParts=date.match(/^(\d{4})\.(\d{2})\.(\d{2}),\s*(.*),\s*([^,]+)$/);
         const group=headings.filter(n=>n.start<a.start).at(-1);
         const e={id,key:id,originalId:a.attrs.id||'',section,group:text(source,group),title,titleURL:titleLink?.attrs.href||'',
           dateline:date,year:section==='activity'?'':date,date:dateParts?`${dateParts[1]}-${dateParts[2]}-${dateParts[3]}`:'',
           city:dateParts?.[4]||'',country:dateParts?.[5]||'',source:text(source,find(nodes,'item-source',a)),
-          status:text(source,find(nodes,'status',a)),byline:text(source,byline),description:text(source,description),
-          authors:section==='research'?text(source,byline).replace(/^Authors?:\s*/i,'').split('·').map(clean).filter(Boolean):[],
+          status:text(source,find(nodes,'status',a)),byline:bylineText,description:text(source,description),
+          authors:section==='research'?bylineText.replace(/^Authors?:\s*/i,'').split('·').map(clean).filter(Boolean):[],
           relatedId:related?.attrs.href.slice(1)||'',relatedLabel:text(source,related),
           links:linkList(source,find(nodes,'pub-links',a),nodes),raw:source.slice(a.start,a.end),node:a};
         used.push(e);result.entries.push(e);
@@ -598,17 +615,20 @@
   }
   function readSite(source,nodes=P.elements(source)) {
     const hero=find(nodes,'hero-copy'), foot=find(nodes,'hero-foot'), school=find(nodes,'school-contact');
-    const location=inner(source,nodes.find(n=>n.tag==='p'&&inside(n,foot))).split(/<br\s*\/?>/i).map(P.plain);
+    const footerText=nodes.find(n=>n.tag==='p'&&inside(n,foot));
+    const affiliationOnly=nodes.find(n=>inside(n,footerText)&&n.attrs['data-editor-affiliation']==='true');
+    const [location='',...affiliation]=inner(source,footerText).split(/<br\s*\/?>/i).map(P.plain);
     const nav=find(nodes,'site-nav');
     return {
-      name:text(source,nodes.find(n=>n.tag==='h1'&&inside(n,hero))), location:location[0]||'', affiliation:location.slice(1).join(' '),
+      name:text(source,nodes.find(n=>n.tag==='h1'&&inside(n,hero))),
+      location:affiliationOnly?'':location, affiliation:affiliationOnly?text(source,affiliationOnly):affiliation.join(' '),
       profile:text(source,find(nodes,'profile-bio')),email:text(source,find(nodes,'email-link')),
       social:linkList(source,find(nodes,'contact-actions'),nodes),
       schoolCaption:text(source,find(nodes,'school-caption')),schoolName:text(source,find(nodes,'school-name')).replace(/\s*↗$/,''),
       schoolURL:find(nodes,'school-name')?.attrs.href||'',address:text(source,nodes.find(n=>n.tag==='address'&&inside(n,school))),
       copyright:text(source,nodes.find(n=>n.tag==='span'&&inside(n,find(nodes,'foot')))),
       pageTitle:text(source,nodes.find(n=>n.tag==='title')),
-      description:(source.match(/<meta\s+name="description"\s+content="([^"]*)"/i)?.[1]||'').replace(/&quot;/g,'"').replace(/&amp;/g,'&'),
+      description:P.decode(source.match(/<meta\s+name="description"\s+content="([^"]*)"/i)?.[1]||''),
       mapVisible:find(nodes,'research-map')?.attrs['data-editor-hidden']!=='true',
       sections:['profile','research','activity','media','contact'].map(id=>{
         const region=nodes.find(n=>n.attrs.id===id), heading=nodes.find(n=>n.tag==='h2'&&inside(n,region));
@@ -626,9 +646,11 @@
     return s;
   }
   function checkLink(link) {
-    if(!clean(link.label)) throw new Error('リンクの表示名を入力してください。');
-    const u=new URL(clean(link.url));if(!['https:','http:','mailto:'].includes(u.protocol)) throw new Error('リンクは https:// などのURLを入力してください。');
-    return {label:clean(link.label).replace(/\s*↗$/,''),url:clean(link.url)};
+    const label=clean(link.label).replace(/\s*↗$/,'');
+    if(!label) throw new Error('リンクの表示名を入力してください。');
+    const url=clean(link.url);
+    if (/^mailto:[^\s]+$/i.test(url)) return {label,url};
+    return {label,url:P.safeURL(url,true,false)};
   }
   function patchSite(source,value) {
     const s=validateSite(value), before=readSite(source), nodes=P.elements(source), changes=[];
@@ -646,7 +668,10 @@
     }
     if(s.location!==before.location||s.affiliation!==before.affiliation) {
       const p=nodes.find(n=>n.tag==='p'&&inside(n,find(nodes,'hero-foot')));
-      changes.push(replaceInner(p,[s.location,s.affiliation].filter(Boolean).map(esc).join('<br>')));
+      const content=!s.location&&s.affiliation
+        ? `<span data-editor-affiliation="true">${esc(s.affiliation)}</span>`
+        : [s.location,s.affiliation].filter(Boolean).map(esc).join('<br>');
+      changes.push(replaceInner(p,content));
     }
     changeText(find(nodes,'profile-bio'),s.profile,before.profile);
     changeText(find(nodes,'email-link'),s.email,before.email);
@@ -919,8 +944,10 @@
   function schedulePreview() {clearTimeout(previewTimer);previewTimer=setTimeout(preview,180);}
   function preview() {
     if(!info)return;
+    const wholePage=$('previewMode').value==='page';
+    $('preview').title=wholePage?'ページ全体のプレビュー':'項目のプレビュー';
     try {
-      if($('previewMode').value==='page') {
+      if(wholePage) {
         const site=activeView==='site'&&siteDirty?P.validateSite(readSiteForm()):siteDraft;
         const map=activeView==='map'&&mapDirty?readMapForm():mapDraft;
         const result=P.build(source,operations,options,site,map).replace(/\x3cscript\b[^>]*>[\s\S]*?<\/script>/gi,'').replace('</head>','<style>a{pointer-events:none}.back-to-top{display:none}</style></head>');
