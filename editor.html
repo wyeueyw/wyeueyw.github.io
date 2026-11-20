@@ -723,10 +723,17 @@
       const old=before[i], n=parts.texts[i], lines=node.label.split('\n').map(clean).filter(Boolean);
       if(!lines.length||lines.length>2||lines.some(s=>s.length>36)) throw new Error('マップのラベルは各行36文字以内・2行までにしてください。');
       if(node.label!==old.label) {
-        const step=i<2?20:13, oldLines=old.label.split('\n').length, y=Number(n.attrs.y)+(oldLines-lines.length)*step/2;
-        const content=lines.map((line,k)=>`<tspan x="${n.attrs.x}"${k?` dy="${step}"`:''}${line.length*(i<2?9:6)>widths[i]?` textLength="${widths[i]}" lengthAdjust="spacingAndGlyphs"`:''}>${esc(line)}</tspan>`).join('');
+        const step=i<2?20:13;
+        const centered=n.attrs['dominant-baseline']==='central';
+        const y=centered?n.attrs.y:String(Number(n.attrs.y)+(old.label.split('\n').length-lines.length)*step/2);
+        const content=lines.map((line,k)=>{
+          // Center both lines around the stone's anchor instead of moving the anchor.
+          const offset=k?step:centered&&lines.length===2?-step/2:0;
+          const fit=line.length*(i<2?9:6)>widths[i]?` textLength="${widths[i]}" lengthAdjust="spacingAndGlyphs"`:'';
+          return `<tspan x="${n.attrs.x}"${offset?` dy="${offset}"`:''}${fit}>${esc(line)}</tspan>`;
+        }).join('');
         changes.push(replaceInner(n,content));
-        let opening=attr(source.slice(n.start,n.openEnd),'y',String(y));
+        let opening=attr(source.slice(n.start,n.openEnd),'y',y);
         opening=showTag(opening,visible(i),node.visible);changes.push({start:n.start,end:n.openEnd,value:opening});
       } else {
         const opening=source.slice(n.start,n.openEnd), next=showTag(opening,visible(i),node.visible);
