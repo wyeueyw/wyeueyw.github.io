@@ -141,7 +141,8 @@
               <div class="field"><label for="status">種別<span class="required">必須</span></label><div class="control"><select id="status" required></select><button type="button" data-add="status" aria-label="種別の選択肢を追加">＋</button></div></div>
               <div class="field" data-for="research"><label for="group">研究分野<span class="required">必須</span></label><div class="control"><select id="group"></select><button type="button" data-add="group" aria-label="研究分野を追加">＋</button></div></div>
               <div class="field" data-for="research media"><label for="year">年<span class="required">必須</span></label><input id="year" type="number" min="1900" max="2199" step="1" placeholder="2026"><p class="hint">公開・掲載年。4桁で表示します。</p></div>
-              <div class="field" data-for="activity" hidden><label for="date">開催日<span class="required">必須</span></label><input id="date" type="date"><p class="hint">複数日開催の場合は初日。期間は説明欄へ。</p></div>
+              <div class="field" data-for="activity" hidden><label for="date">開始日<span class="required">必須</span></label><input id="date" type="date"></div>
+              <div class="field" data-for="activity" hidden><label for="endDate">終了日（任意）</label><input id="endDate" name="endDate" type="date" aria-describedby="endDateHint"><p class="hint" id="endDateHint">1日だけの開催なら空欄にします。</p></div>
               <div class="field" data-for="activity" hidden><label for="city">都市<span class="required">必須</span></label><div class="control"><select id="city"></select><button type="button" data-add="city" aria-label="都市を追加">＋</button></div></div>
               <div class="field" data-for="activity" hidden><label for="country">国<span class="required">必須</span></label><div class="control"><select id="country"></select><button type="button" data-add="country" aria-label="国を追加">＋</button></div></div>
               <div class="field" data-for="research media"><label id="sourceLabel" for="source">掲載先<span class="required">必須</span></label><div class="control"><select id="source"></select><button type="button" data-add="source" aria-label="掲載先・サイト名を追加">＋</button></div></div>
@@ -309,16 +310,26 @@
     if (!Number.isFinite(d.getTime()) || d.toISOString().slice(0,10)!==value) throw new Error('実在する日付を入力してください。');
     return value.replace(/-/g,'.');
   }
+  function formatDateRange(startDate,endDate) {
+    const start=dateValue(startDate);
+    if (!endDate || endDate===startDate) return start;
+    const end=dateValue(endDate);
+    if (end<start) throw new Error('終了日は開始日以降にしてください。');
+    if (end.slice(0,7)===start.slice(0,7)) return `${start}-${end.slice(8)}`;
+    if (end.slice(0,4)===start.slice(0,4)) return `${start}-${end.slice(5)}`;
+    return `${start}-${end}`;
+  }
   function validate(input) {
     const entry={...input};
-    for (const key of ['section','group','year','date','city','country','source','status','title','titleURL','byline','relatedId','relatedLabel']) entry[key]=clean(entry[key]);
+    for (const key of ['section','group','year','date','endDate','city','country','source','status','title','titleURL','byline','relatedId','relatedLabel']) entry[key]=clean(entry[key]);
     entry.description=String(entry.description || '').trim();
     entry.authors=(Array.isArray(entry.authors)?entry.authors:String(entry.authors || '').split('\n')).map(clean).filter(Boolean);
     if (!['research','activity','media'].includes(entry.section)) throw new Error('章を選んでください。');
     if (!entry.title) throw new Error('タイトルを入力してください。');
     if (!entry.status) throw new Error('種別を選んでください。');
     if (entry.section==='activity') {
-      entry.dateline=dateValue(entry.date);
+      entry.dateline=formatDateRange(entry.date,entry.endDate);
+      if (entry.endDate===entry.date) entry.endDate='';
       if (!entry.city || !entry.country) throw new Error('都市と国を選んでください。');
       entry.dateline+=`, ${entry.city}, ${entry.country}`;
     } else {
@@ -337,7 +348,7 @@
     entry.status=normalizeOption(entry.status);
     entry.source=normalizeOption(entry.source);
     if(entry.section==='activity') {entry.year='';entry.source='';entry.group='';entry.authors=[];}
-    else {entry.date='';entry.city='';entry.country='';if(entry.section==='media'){entry.group='';entry.authors=[];}}
+    else {entry.date='';entry.endDate='';entry.city='';entry.country='';if(entry.section==='media'){entry.group='';entry.authors=[];}}
     if (entry.relatedId && !/^[A-Za-z][\w:.-]*$/.test(entry.relatedId)) throw new Error('関連項目のIDが不正です。');
     if (entry.relatedId && !entry.relatedLabel) throw new Error('ページ内リンクの表示名を入力してください。');
     return entry;
@@ -428,7 +439,7 @@
     else result=result.replace(/  <\/body>/,config+'\n  </body>');
     return result;
   }
-  globalThis.PageEditor={defaults,clean,escape,decode,plain,elements,read,mergeOptions,normalizeOption,safeURL,validate,uniqueId,render,insert,build};
+  globalThis.PageEditor={defaults,clean,escape,decode,plain,elements,read,mergeOptions,normalizeOption,safeURL,dateKey,validate,uniqueId,render,insert,build};
 })();
 
     </script>
@@ -485,6 +496,16 @@
       ? beforeLink.replace(/(?:^|\s+·\s+)Related work:$/,'')
       : raw;
   }
+  function readActivityDateline(dateline) {
+    const match=dateline.match(/^(\d{4})\.(\d{2})\.(\d{2})(?:[-–](?:(?:(\d{4})\.)?(\d{2})\.)?(\d{2}))?,\s*(.*),\s*([^,]+)$/);
+    if (!match) return {date:'',endDate:'',city:'',country:''};
+    const [,year,month,day,endYear,endMonth,endDay,city,country]=match;
+    return {
+      date:`${year}-${month}-${day}`,
+      endDate:endDay?`${endYear||year}-${endMonth||month}-${endDay}`:'',
+      city,country
+    };
+  }
   function read(source) {
     const result=oldRead(source), nodes=P.elements(source), used=[];
     result.entries=[];
@@ -498,11 +519,10 @@
         const related=nodes.find(n=>n.tag==='a'&&inside(n,byline)&&n.attrs.href?.startsWith('#'));
         const bylineText=readByline(source,byline,related,section);
         const title=text(source,titleNode).replace(/\s*↗$/,''), id=a.attrs.id || P.uniqueId(source,used,title);
-        const dateParts=date.match(/^(\d{4})\.(\d{2})\.(\d{2}),\s*(.*),\s*([^,]+)$/);
+        const dateFields=readActivityDateline(date);
         const group=headings.filter(n=>n.start<a.start).at(-1);
         const e={id,key:id,originalId:a.attrs.id||'',section,group:text(source,group),title,titleURL:titleLink?.attrs.href||'',
-          dateline:date,year:section==='activity'?'':date,date:dateParts?`${dateParts[1]}-${dateParts[2]}-${dateParts[3]}`:'',
-          city:dateParts?.[4]||'',country:dateParts?.[5]||'',source:text(source,find(nodes,'item-source',a)),
+          dateline:date,year:section==='activity'?'':date,...dateFields,source:text(source,find(nodes,'item-source',a)),
           status:text(source,find(nodes,'status',a)),byline:bylineText,description:text(source,description),
           authors:section==='research'?bylineText.replace(/^Authors?:\s*/i,'').split('·').map(clean).filter(Boolean):[],
           relatedId:related?.attrs.href.slice(1)||'',relatedLabel:text(source,related),
@@ -519,7 +539,7 @@
       value:attr(attr(source.slice(e.node.start,e.node.openEnd),'id',e.id),'data-anchor-highlight','')}));
     return edits(source,changes);
   }
-  const userFields=['section','group','year','date','city','country','source','status','title','titleURL','byline','description','authors','relatedId','relatedLabel','links'];
+  const userFields=['section','group','year','date','endDate','city','country','source','status','title','titleURL','byline','description','authors','relatedId','relatedLabel','links'];
   function record(entry) {return Object.fromEntries(userFields.map(k=>[k,entry[k]??'']));}
   function relatedMarkup(e) {
     const r=P.render(e), nodes=P.elements(r);return inner(r,find(nodes,'byline')).trim();
@@ -563,8 +583,7 @@
         candidates=candidates.filter(n=>n.start>group.end&&n.end<=end);
       } else {candidates=[];prefix=`          <h3 class="research-group">${esc(entry.group)}</h3>\n\n`;}
     }
-    const dateKey=s=>(s.match(/^\d{4}(?:\.\d{2}\.\d{2})?/)?.[0]||'').padEnd(10,'.00');
-    const before=candidates.find(n=>dateKey(text(source,find(nodes,'item-dateline',n)))<dateKey(entry.dateline));
+    const before=candidates.find(n=>P.dateKey(text(source,find(nodes,'item-dateline',n)))<P.dateKey(entry.dateline));
     let position=before?.start??end, start=source.lastIndexOf('\n',position-1)+1;
     if(/^\s*$/.test(source.slice(start,position))) position=start;
     return source.slice(0,position)+prefix+'          '+raw.trimStart()+'\n\n'+source.slice(position);
@@ -585,7 +604,7 @@
         removed.add(id);changes.push({...blockRange(output,before.node),value:''});continue;
       }
       if(op.kind!=='update') throw new Error('変更の種類が不正です。');
-      const raw=patchArticle(before,entry), move=before.section!==entry.section||before.group!==entry.group||before.dateline!==entry.dateline;
+      const raw=patchArticle(before,entry), move=before.section!==entry.section||before.group!==entry.group||P.dateKey(before.dateline)!==P.dateKey(entry.dateline);
       if(move) {changes.push({...blockRange(output,before.node),value:''});additions.push({entry,raw});}
       else if(raw!==before.raw) changes.push({start:before.node.start,end:before.node.end,value:raw});
     }
@@ -832,9 +851,10 @@
   function readLinks(container) {return [...$(container).children].map(row=>({label:row.children[0].value,url:row.children[1].value}));}
   function readForm() {
     const data={};for(const id of ['section','status','group','year','date','city','country','source','title','titleURL','authors','byline','description'])data[id]=$(id).value;
+    data.endDate=$('endDate').disabled?'':$('endDate').value;
     data.relatedId=$('related').value;data.relatedLabel=data.relatedId?$('relatedLabel').value:'';data.links=readLinks('links');return data;
   }
-  function hasItemInput() {return !!editingId||['title','titleURL','byline','description'].some(id=>!$(id).disabled&&P.clean($(id).value))||readLinks('links').some(l=>l.label||l.url);}
+  function hasItemInput() {return !!editingId||['title','date','endDate','titleURL','byline','description'].some(id=>!$(id).disabled&&P.clean($(id).value))||readLinks('links').some(l=>l.label||l.url);}
   function canLeaveItem() {return !itemDirty||!hasItemInput()||confirm('まだ変更リストに反映していない入力があります。入力を取り消して切り替えますか？');}
   function resetForm() {
     const section=$('section').value;form.reset();$('section').value=section;$('year').value=new Date().getFullYear();
@@ -869,7 +889,7 @@
       const list=options[optionKey(field)];if(value&&!list.includes(value))list.push(value);
     }
     updateFields(true);
-    for(const field of ['status','group','year','date','city','country','source','title','titleURL','byline','description'])$(field).value=e[field]||'';
+    for(const field of ['status','group','year','date','endDate','city','country','source','title','titleURL','byline','description'])$(field).value=e[field]||'';
     $('authors').value=e.authors.join('\n');updateRelated(e.relatedId);$('relatedLabel').value=e.relatedLabel||'';
     $('links').replaceChildren();e.links.forEach(l=>addLink('links',l));
     $('existingSelect').value=id;itemDirty=false;$('formTitle').textContent='項目を編集';$('queueButton').textContent='編集を変更リストに反映';
