@@ -183,7 +183,7 @@
         </div>
         <div data-editor-view="map" hidden>
           <h2>研究マップ</h2>
-          <p class="hint">結晶の形・配置を保ってラベルを変更できます。改行は2行まで。親を非表示にすると、その下の概念と接続線も非表示になります。</p>
+          <p class="hint">ラベルは2行まで。空欄にすると結晶と接続線が残ります。親を非表示にすると、その下の概念と接続線も非表示になります。</p>
           <form id="mapForm"><fieldset id="mapFields" disabled><div id="mapRows"></div><div class="actions"><button class="primary" type="submit">研究マップの変更を反映</button><button id="resetMap" type="button">入力を戻す</button></div></fieldset></form>
         </div>
       </section>
@@ -740,11 +740,11 @@
     function visible(i) {return active[i]??(active[i]=!!map[i].visible&&(mapParents[i]===null||visible(mapParents[i])));}
     map.forEach((node,i)=>{
       const old=before[i], n=parts.texts[i], lines=node.label.split('\n').map(clean).filter(Boolean);
-      if(!lines.length||lines.length>2||lines.some(s=>s.length>36)) throw new Error('マップのラベルは各行36文字以内・2行までにしてください。');
+      if(lines.length>2||lines.some(s=>s.length>36)) throw new Error('マップのラベルは各行36文字以内・2行までにしてください。');
       if(node.label!==old.label) {
         const step=i<2?20:13;
         const centered=n.attrs['dominant-baseline']==='central';
-        const y=centered?n.attrs.y:String(Number(n.attrs.y)+(old.label.split('\n').length-lines.length)*step/2);
+        const y=centered?n.attrs.y:String(Number(n.attrs.y)+(old.label.split('\n').length-Math.max(1,lines.length))*step/2);
         const content=lines.map((line,k)=>{
           // Center both lines around the stone's anchor instead of moving the anchor.
           const offset=k?step:centered&&lines.length===2?-step/2:0;
@@ -777,7 +777,9 @@
       }
     }
     if(map.some((n,i)=>n.label!==before[i].label||n.visible!==before[i].visible)) {
-      const region=find(parts.nodes,'research-map'), label='Research map. '+map.filter((n,i)=>visible(i)).map(n=>clean(n.label)).join('; ')+'.';
+      const region=find(parts.nodes,'research-map');
+      const labels=map.filter((_,i)=>visible(i)).map(n=>clean(n.label)).filter(Boolean);
+      const label=labels.length?`Research map. ${labels.join('; ')}.`:'Research map';
       changes.push({start:region.start,end:region.openEnd,value:attr(source.slice(region.start,region.openEnd),'aria-label',label)});
     }
     return edits(source,changes);
@@ -959,9 +961,10 @@
     if(!info)return;$('mapRows').replaceChildren();
     for(const [i,n] of (mapDraft||info.map).entries()) {
       const row=document.createElement('div');row.className='map-setting';row.dataset.nodeId=n.id;
-      const label=document.createElement('label');label.textContent=P.clean(info.map[i].label);label.htmlFor='map-label-'+i;
-      const input=document.createElement('textarea');input.id='map-label-'+i;input.rows=2;input.value=n.label;input.setAttribute('aria-label','マップ: '+P.clean(info.map[i].label));
-      const visible=document.createElement('input');visible.type='checkbox';visible.checked=n.visible;visible.setAttribute('aria-label',P.clean(info.map[i].label)+'を表示');
+      const slotName=P.clean(info.map[i].label)||`ラベルなしの結晶 ${i+1}`;
+      const label=document.createElement('label');label.textContent=slotName;label.htmlFor='map-label-'+i;
+      const input=document.createElement('textarea');input.id='map-label-'+i;input.rows=2;input.value=n.label;input.setAttribute('aria-label','マップ: '+slotName);
+      const visible=document.createElement('input');visible.type='checkbox';visible.checked=n.visible;visible.setAttribute('aria-label',slotName+'を表示');
       const show=document.createElement('label');show.append(visible,document.createTextNode(' 表示'));
       row.append(label,input,show);$('mapRows').append(row);
     }
