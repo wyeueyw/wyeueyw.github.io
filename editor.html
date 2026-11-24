@@ -641,7 +641,7 @@
     return {
       name:text(source,nodes.find(n=>n.tag==='h1'&&inside(n,hero))),
       location:affiliationOnly?'':location, affiliation:affiliationOnly?text(source,affiliationOnly):affiliation.join(' '),
-      profile:text(source,find(nodes,'profile-bio')),email:text(source,find(nodes,'email-link')),
+      profile:inner(source,find(nodes,'profile-bio')).split(/<br\s*\/?>/i).map(P.plain).join('\n'),email:text(source,find(nodes,'email-link')),
       social:linkList(source,find(nodes,'contact-actions'),nodes),
       schoolCaption:text(source,find(nodes,'school-caption')),schoolName:text(source,find(nodes,'school-name')).replace(/\s*↗$/,''),
       schoolURL:find(nodes,'school-name')?.attrs.href||'',address:text(source,nodes.find(n=>n.tag==='address'&&inside(n,school))),
@@ -692,7 +692,10 @@
         : [s.location,s.affiliation].filter(Boolean).map(esc).join('<br>');
       changes.push(replaceInner(p,content));
     }
-    changeText(find(nodes,'profile-bio'),s.profile,before.profile);
+    if(s.profile!==before.profile) {
+      const bio=find(nodes,'profile-bio');
+      changes.push(replaceInner(bio,'\n            '+s.profile.split(/\r?\n/).map(esc).join('<br>\n            ')+'\n          '));
+    }
     changeText(find(nodes,'email-link'),s.email,before.email);
     changeText(find(nodes,'school-caption'),s.schoolCaption,before.schoolCaption);
     if(s.schoolName!==before.schoolName||s.schoolURL!==before.schoolURL) {
